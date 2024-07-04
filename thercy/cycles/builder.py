@@ -1,11 +1,11 @@
 from thercy.state import StateGraph
 from thercy.utils import list_like
 
-from .rankine import Rankine
-from .._parts import *
+from .cycle import Cycle
+from ._parts import *
 
 
-class RankineBuilder:
+class CycleBuilder:
     _fluid: str
     _graph: StateGraph
     _parts: dict[str: BasePart]
@@ -27,7 +27,7 @@ class RankineBuilder:
             part.connections = connections
             self._graph.add_part(part)
 
-        return Rankine(self._fluid, self._graph)
+        return Cycle(self._fluid, self._graph)
 
     def add_condenser(self, label: str, inlet: str, outlet: str):
         condensator = Condenser(label)

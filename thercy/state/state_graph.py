@@ -1,8 +1,8 @@
 import numpy as np
 
 from thercy.utils import list_like
-from .cycle import StateCycle
-from .point import StatePoint
+from .state_cycle import StateCycle
+from .state_point import StatePoint
 
 
 class StateGraph:

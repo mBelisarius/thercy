@@ -6,7 +6,7 @@ from thercy.state import StateGraph
 from thercy.utils import norm_l1, norm_l2, norm_lmax, norm_lp
 
 
-class Rankine:
+class Cycle:
     def __init__(self, fluid: str, parts: StateGraph):
         self._graph: StateGraph = parts
         self._fluid: str = fluid

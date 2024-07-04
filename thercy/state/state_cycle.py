@@ -4,7 +4,7 @@ from CoolProp.Plots import StateContainer
 from thercy.constants import Property, PropertyInfo
 from thercy.utils import list_like
 
-from .point import StatePoint
+from .state_point import StatePoint
 
 
 class StateCycle:
