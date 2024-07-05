@@ -36,6 +36,20 @@ class CycleBuilder:
 
         return self
 
+    def add_evaporator(self, label: str, inlet: str, outlet: str):
+        evaporator = Evaporator(label)
+        self._parts[label] = evaporator
+        self._connections[label] = [([inlet], [outlet])]
+
+        return self
+
+    def add_heat_exchanger(self, label: str, inlet_lt: str, inlet_ht: str, outlet_lt: str, outlet_ht: str, dt: float = 0.):
+        heat_exchanger = HeatExchanger(label, dt)
+        self._parts[label] = heat_exchanger
+        self._connections[label] = [([inlet_lt], [outlet_lt]), ([inlet_ht], [outlet_ht])]
+
+        return self
+
     def add_heater_closed(self, label: str, inlets_lp: list[str], inlet_hp: str, outlet_lp: str, outlet_hp: str, t_out: float):
         reheater_open = HeaterClosed(label, t_out)
         self._parts[label] = reheater_open

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize, root
 
-from thercy.constants import PartType, Property
+from thercy.constants import PartType, Property, PropertyInfo
 from thercy.state import StateGraph
 from thercy.utils import norm_l1, norm_l2, norm_lmax, norm_lp
 
@@ -133,18 +133,20 @@ class Cycle:
 
         return x0_fraction - sol_conserv.x
 
-    def solve(self, x0, knowns=None, xtol=1e-4, verbose=0):
+    def solve(self, x0, knowns=None, tol=1e-4, verbose=0):
         if knowns is None:
             raise ValueError('At least one property must be known for every state')
 
         len_props = len(Property)
         len_props_input = len(knowns)
         len_exclude = len_props - len_props_input
-        x0_complete = np.ones(len_props * len(x0) // len_props_input)
+        x0_rand = 2. * np.random.rand(len_props * len(x0) // len_props_input) - 1.
+        x0_complete = np.array(len(x0) * [273.15, 1e5, 1., 1e3, 1e4, 0.5, 1000.]) * (1. + 0.1 * x0_rand)
 
         for i in range(0, len(x0), len_props_input):
             new_index = i + (i // len_props_input) * len_exclude
-            x0_complete[new_index:new_index + len_props_input] = x0[i:i + len_props_input]
+            indices = [new_index + PropertyInfo.get_intkey(k) for k in knowns]
+            x0_complete[indices] = x0[i:i + len_props_input]
 
         if 'Y' in knowns:
             x0_fraction = x0_complete[len_props - 1::len_props]
@@ -158,8 +160,8 @@ class Cycle:
             self._iterate,
             x0_fraction,
             method='df-sane',
-            args=(x0_complete, True, xtol, verbose),
-            options={'sigma_0': 1e-4, 'fatol': xtol, 'ftol': 0.0, 'maxfev': 100}
+            args=(x0_complete, True, tol, verbose),
+            options={'sigma_0': 1e-4, 'fatol': tol, 'ftol': 0.0, 'maxfev': 100}
         )
 
         # Process the solution, guarantees that graph.states contains the
@@ -170,7 +172,7 @@ class Cycle:
             self._equation_thermo,
             sol_x,
             method='df-sane',
-            options={'fatol': xtol, 'maxfev': 10}
+            options={'fatol': tol, 'maxfev': 10}
         )
         sol_x = sol_thermo.x
         for index in range(self._graph.points):

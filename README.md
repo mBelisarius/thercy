@@ -7,7 +7,7 @@ Thercy is a thermodynamic cycle solver package. It simplifies the modeling and a
 
 It provides:
 
-- advanced Rankine cycle builder
+- advanced Rankine and refrigeration cycles builder
 - representation of thermodynamic states
 - representation of cycles and connected graphs
 - thermodynamic diagrams

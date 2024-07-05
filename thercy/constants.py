@@ -147,8 +147,10 @@ class PartType(Enum):
 
     """
     CONDENSATOR = 0
-    HEAT_SOURCE = 1
-    PUMP = 2
-    REHEATER_CLOSE = 3
-    REHEATER_OPEN = 4
-    TURBINE = 5
+    EVAPORATOR = 1
+    HEAT_EXCHANGER = 2
+    HEAT_SOURCE = 3
+    PUMP = 4
+    REHEATER_CLOSE = 5
+    REHEATER_OPEN = 6
+    TURBINE = 7

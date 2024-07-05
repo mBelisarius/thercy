@@ -4,7 +4,7 @@ from thercy.state import StatePoint
 from .base_part import BasePart, Connection
 
 
-class Condenser(BasePart):
+class Evaporator(BasePart):
     def __init__(self, label, connections=None):
         """
         Parameters
@@ -15,7 +15,7 @@ class Condenser(BasePart):
         """
         super().__init__(
             label,
-            PartType.CONDENSATOR,
+            PartType.EVAPORATOR,
             connections,
         )
 
@@ -31,7 +31,7 @@ class Condenser(BasePart):
         inlet_label, inlet_state = next(iter(inlets.items()))
         outlet_state = inlet_state.clone()
 
-        outlet_state['Q'] = 0.0
+        outlet_state['Q'] = 1.0
         outlet_state['P'] = inlet_state['P']
         outlet_state.properties('Q', 'P')
 
