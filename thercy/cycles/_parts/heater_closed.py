@@ -49,17 +49,19 @@ class HeaterClosed(BasePart):
         partial_y_lp = 0.0
         partial_p_lp = 0.0
         partial_h_lp = 0.0
+        partial_t_lp = float('inf')
         for inlet in inlets_lp.values():
             partial_y_lp += inlet['Y']
             partial_p_lp += inlet['Y'] * inlet['P']
             partial_h_lp += inlet['Y'] * inlet['H']
+            partial_t_lp = min(partial_t_lp, inlet['T'])
 
         outlet_lp_state['P'] = partial_p_lp / partial_y_lp
         outlet_lp_state['Q'] = 0.0
         outlet_lp_state.properties('P', 'Q')
         # outlet_lp_state['Y'] = partial_y_lp
 
-        # dH = partial_y_lp * outlet_lp_state['H'] - partial_h_lp
+        # dH = partial_y_lp * (outlet_lp_state['H'] - partial_h_lp)
 
         partial_y_hp = 0.0
         partial_p_hp = 0.0
@@ -68,7 +70,7 @@ class HeaterClosed(BasePart):
             partial_p_hp += inlet['Y'] * inlet['P']
 
         outlet_hp_state['P'] = partial_p_hp / partial_y_hp
-        outlet_hp_state['T'] = self._t_out
+        outlet_hp_state['T'] = min(self._t_out, partial_t_lp)
         outlet_hp_state.properties('P', 'T')
         # outlet_hp_state['Y'] = partial_y_hp
 

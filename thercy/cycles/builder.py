@@ -51,7 +51,14 @@ class CycleBuilder:
         return self
 
     def add_heater_closed(self, label: str, inlets_lp: list[str], inlet_hp: str, outlet_lp: str, outlet_hp: str, t_out: float):
-        reheater_open = HeaterClosed(label, t_out)
+        reheater_closed = HeaterClosed(label, t_out)
+        self._parts[label] = reheater_closed
+        self._connections[label] = [(inlets_lp, [outlet_lp]), ([inlet_hp], [outlet_hp])]
+
+        return self
+
+    def add_heater_closed_real(self, label: str, inlets_lp: list[str], inlet_hp: str, outlet_lp: str, outlet_hp: str):
+        reheater_open = HeaterClosedReal(label)
         self._parts[label] = reheater_open
         self._connections[label] = [(inlets_lp, [outlet_lp]), ([inlet_hp], [outlet_hp])]
 

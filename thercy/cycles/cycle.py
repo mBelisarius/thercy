@@ -58,31 +58,6 @@ class Cycle:
 
         return residual
 
-    def _equation_conserv(self, y: np.ndarray):
-        residual = np.zeros(2 * len(self._graph))
-
-        for index in range(self._graph.points):
-            self._graph.states[index]['Y'] = y[index]
-
-        for i, part in enumerate(self._graph.nodes.values()):
-            inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
-            outlets_state = {p.label: self._graph.get_state((part.label, p.label)) for p in part.outlet_parts}
-            residual[2 * i:2 * i + 2] = self._graph[part.label].solve_conserv(inlets_state, outlets_state)
-
-        return residual
-
-    def _iterate_conserv_scalar(self, x: np.ndarray, verbose=0):
-        residual = self._equation_conserv(x)
-        residual_mass = norm_l2(residual[0::2])
-        residual_energy = norm_l2(residual[1::2])
-
-        if verbose >= 3:
-            print(f"{'Rankine._iterate_conserv : ':40s}"
-                  f"{residual_energy:3e} | {np.sqrt(residual_energy / len(self._graph)):3e} | "
-                  f"{residual_mass:.3e} | {np.sqrt(residual_mass / len(self._graph)):.3e}")
-
-        return residual_energy + 1e9 * residual_mass
-
     def _iterate_thermo(self, x0: np.ndarray, xtol=1e-4, maxfev=10, verbose=0):
         sol = root(
             self._equation_thermo,
@@ -100,38 +75,38 @@ class Cycle:
 
         if verbose >= 3:
             print(f"{'Rankine._iterate_thermo : ':40s}"
-                  f"fun = {sol.fun}, nfev={sol.nfev}")
+                  f"L2(fun) = {norm_l2(sol.fun, rescale=True)}, nfev={sol.nfev}")
 
         return sol.x
 
-    def _iterate(self, x0_fraction: np.ndarray, x0_states: np.ndarray, update_states=False, xtol=1e-4, verbose=0):
-        x0_states_ = x0_states.copy()
-        x0_states_[len(Property) - 1::len(Property)] = x0_fraction
-        sol_thermo = self._iterate_thermo(x0_states_, xtol=xtol, verbose=verbose)
+    def _equation_conserv(self, y: np.ndarray):
+        residual = np.zeros(2 * len(self._graph))
 
-        bounds = self._graph.points * [(1.0, 1000.0)]
-        sol_conserv = minimize(
-            self._iterate_conserv_scalar,
-            bounds=bounds,
-            x0=x0_fraction,
-            args=(verbose,),
-            method='L-BFGS-B',
-            options={'ftol': xtol / 10, 'maxiter': 1000}
-        )
+        for index in range(self._graph.points):
+            self._graph.states[index]['Y'] = y[index]
 
-        if update_states:
-            x0_states = x0_states_
+        for i, part in enumerate(self._graph.nodes.values()):
+            inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
+            outlets_state = {p.label: self._graph.get_state((part.label, p.label)) for p in part.outlet_parts}
+            residual[2 * i:2 * i + 2] = self._graph[part.label].solve_conserv(inlets_state, outlets_state)
 
-        if verbose >= 2:
-            # residual = self._equation_conserv(sol_conserv.x)
-            # residual_mass = norm_l2(residual[0::2])
-            # residual_energy = norm_l2(residual[1::2])
-            # print(f"{'Rankine._iterate : ':40s}"
-            #       f"{residual_energy:3e} | {np.sqrt(residual_energy / 11):3e} | "
-            #       f"{residual_mass:.3e} | {np.sqrt(residual_mass / 11):.3e}")
-            pass
+        return residual
 
-        return x0_fraction - sol_conserv.x
+    def _iterate(self, x_states: np.ndarray, xtol=1e-4, verbose=0):
+        y = x_states[len(Property) - 1::len(Property)]
+
+        sol_thermo = self._iterate_thermo(x_states, xtol=xtol, verbose=verbose)
+        residual = self._equation_conserv(y)
+
+        residual_mass = norm_l2(residual[0::2], rescale=True)
+        residual_energy = norm_l2(residual[1::2], rescale=True)
+
+        if verbose >= 3:
+            print(f"{'Rankine._iterate_conserv : ':40s}"
+                  f"{residual_energy:3e} | {residual_mass:.3e}")
+
+        ressum = residual_energy + 1.0e6 * residual_mass
+        return ressum
 
     def solve(self, x0, knowns=None, tol=1e-4, verbose=0):
         if knowns is None:
@@ -155,30 +130,25 @@ class Cycle:
             x0_fraction = np.full(self._graph.points, 1000.0)
             x0_complete[len_props - 1::len_props] = x0_fraction
 
-        # Solve for the conservation laws
-        sol_conserv = root(
+        bounds = self._graph.points * [(1.0, 2000.0), (1.0e3, 100.0e6), (1.0e-3, 1.0e4), (1.0e3, 100.0e6),
+                                       (1.0, 10.0e3), (-1.0, 1.0), (1.0, 1000.0)]
+        sol_conserv = minimize(
             self._iterate,
-            x0_fraction,
-            method='df-sane',
-            args=(x0_complete, True, tol, verbose),
-            options={'sigma_0': 1e-4, 'fatol': tol, 'ftol': 0.0, 'maxfev': 100}
+            bounds=bounds,
+            x0=x0_complete,
+            args=(tol, verbose,),
+            method='L-BFGS-B',
+            options={'ftol': tol / 10, 'maxiter': 1000}
         )
 
-        # Process the solution, guarantees that graph.states contains the
-        # correct values
-        sol_x = x0_complete.copy()
-        sol_x[len_props - 1::len_props] = sol_conserv.x * 1000.0 / np.max(sol_conserv.x)
-        sol_thermo = root(
-            self._equation_thermo,
-            sol_x,
-            method='df-sane',
-            options={'fatol': tol, 'maxfev': 10}
-        )
-        sol_x = sol_thermo.x
+        sol_x = sol_conserv.x
         for index in range(self._graph.points):
             index_begin = index * len_props
             index_end = index_begin + len_props
             self._graph.states[index].from_array(sol_x[index_begin:index_end])
+
+        print(sol_conserv)
+        print(self._graph.states)
 
         # Post-processing
         for part in self._graph.nodes.values():

@@ -57,7 +57,7 @@ class HeaterClosedReal(BasePart):
         outlet_lp_state.properties('P', 'Q')
         # outlet_lp_state['Y'] = partial_y_lp
 
-        dH = partial_y_lp * outlet_lp_state['H'] - partial_h_lp
+        dH = partial_y_lp * (outlet_lp_state['H'] - partial_h_lp)
 
         partial_y_hp = 0.0
         partial_p_hp = 0.0
