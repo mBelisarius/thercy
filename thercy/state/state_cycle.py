@@ -31,15 +31,27 @@ class StateCycle:
             Dictionary containing state points of the cycle. Default: {}
 
         """
-        if data is None:
-            data = {}
-
         if isinstance(data, (list, tuple, np.ndarray)):
-            data = {key: self.new_empty_state(2) for key in data}
+            data = {key: self.new_empty_state(1) for key in data}
 
         if isinstance(data, dict):
-            if not np.all([d.size == len(Property) for d in data.values()]):
-                raise ValueError('All states must contain all properties')
+            data_inspect = next(iter((data.values())))
+            if isinstance(data_inspect, (list, np.ndarray)):
+                if not np.all([d.size == len(Property) for d in data.values()]):
+                    raise ValueError('All states must contain all properties')
+            elif isinstance(data_inspect, dict):
+                aux = {k: self.new_empty_state() for k, v in data.values()}
+                for k in data.keys():
+                    for prop in Property:
+                        prop_key = PropertyInfo.get_strkey(prop.name)
+                        if prop_key in data[k].keys():
+                            aux[k][prop.value] = data[k][prop_key]
+                data = aux
+            else:
+                raise TypeError(f"Non supported state type {type(data_inspect)}")
+
+        if data is None:
+            data = {}
 
         self._data = np.array([data[k] for k in data.keys()], dtype=np.float64)
         self._data_keys = {k: i for i, k in enumerate(data.keys())}
@@ -303,7 +315,7 @@ class StateCycle:
         if exclude is None:
             exclude = []
 
-        knowns = {Property(i).name: v for i, v in enumerate(state) if v is not None}
+        knowns = {Property(i).name: v for i, v in enumerate(state) if v is not None and not np.isnan(v)}
 
         if prop1 is not None and prop2 is not None:
             pairs = [(prop1, prop2)]
@@ -337,7 +349,7 @@ class StateCycle:
                 except ValueError as e:
                     pass
 
-    def calculate_properties(self, key):
+    def calculate_properties(self, key=None, props=None):
         """
         Calculate properties for all state points in the cycle.
 
@@ -347,12 +359,18 @@ class StateCycle:
             Key of the states to be calculated.
 
         """
+        if key is None:
+            key = self._data_keys.keys()
+
+        if props is None:
+            props = (None, None)
+
         if not list_like(key):
             key = [key]
 
         for k in key:
             index_state = self._data_keys[k]
-            self.calculate_props(self._data[index_state], self._fluid)
+            self.calculate_props(self._data[index_state], self._fluid, *props)
 
     def constant_properties(self, key1, key2, tol=1e-7):
         """
