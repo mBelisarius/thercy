@@ -1,5 +1,6 @@
 import numpy as np
 
+from thercy.constants import Property, PropertyInfo
 from thercy.utils import list_like
 from .state_cycle import StateCycle
 
@@ -207,21 +208,22 @@ class StateGraph:
 
                 prop_x = next((prop.name for prop in self.states.constant_properties(index1, index2) if
                                prop.name not in ('S', 'Q', 'Y')), 'H' if precise else 'T')
+                prop_x_index = PropertyInfo.get_intkey(prop_x)
 
-                s_diff = state2['S'] - state1['S']
-                x_diff = state2[prop_x] - state1[prop_x]
+                s_diff = state2[Property.S.value] - state1[Property.S.value]
+                x_diff = state2[prop_x_index] - state1[prop_x_index]
 
-                s = np.linspace(state1['S'], state2['S'], n - 1)
-                s = np.append(s, state2['S'])
+                s = np.linspace(state1[Property.S.value], state2[Property.S.value], n - 1)
+                s = np.append(s, state2[Property.S.value])
 
-                x = (x_diff / s_diff) * (s - state1['S']) + state1[prop_x] if abs(s_diff) > 1e-7 \
-                    else np.linspace(state1[prop_x], state2[prop_x], n)
+                x = (x_diff / s_diff) * (s - state1[Property.S.value]) + state1[prop_x_index] if abs(s_diff) > 1e-7 \
+                    else np.linspace(state1[prop_x_index], state2[prop_x_index], n)
 
                 for j in range(n):
                     cloud[i][j, 'S'] = s[j]
                     cloud[i][j, prop_x] = x[j]
-                    cloud[i][j].properties(calc=['T'])
-                    cloud[i][j].properties('T', 'S', exclude=['T'])
-                    cloud[i][j, 'Y'] = state1['Y']
+                    StateCycle.calculate_props(cloud[i][j], self.fluid, calc=['T'])
+                    StateCycle.calculate_props(cloud[i][j], self.fluid, 'T', 'S', exclude=['T'])
+                    cloud[i][j, 'Y'] = state1[Property.Y.value]
 
         return cloud
