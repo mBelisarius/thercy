@@ -83,32 +83,20 @@ class Cycle:
             self._graph.states[index, 'Y'] = y[index]
 
         for i, part in enumerate(self._graph.nodes.values()):
-            # inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
-            # outlets_state = {p.label: self._graph.get_state((part.label, p.label)) for p in part.outlet_parts}
             inlets = [p.label for p in part.inlet_parts]
             outlets = [p.label for p in part.outlet_parts]
             residual[2 * i:2 * i + 2] = self._graph[part.label].solve_conserv(self._graph, inlets, outlets)
 
         return residual
 
-    def _iterate(self, x_states: np.ndarray, xtol=1e-4, verbose=0):
-        cycle = StateCycle(self._fluid, [i for i in range(self._graph.points)])
-        for i in range(self._graph.points):
-            cycle[i, Property.P.value] = x_states[i * 3 + 0]
-            cycle[i, Property.H.value] = x_states[i * 3 + 1]
-            cycle[i, Property.Y.value] = x_states[i * 3 + 2]
-
-        cycle.calculate_properties(props=('P', 'H'))
-        x_complete = cycle._data
-        y = x_complete[:, -1]
-
-        sol_thermo = self._iterate_thermo(x_complete, xtol=xtol, verbose=verbose)
+    def _iterate(self, y: np.ndarray, verbose=0):
         # We already have sol_thermo == self._graph.states._data, so no need to update
+        y *= 1000.0 / np.max(y)
         residual = self._equation_conserv(y)
 
         residual_mass = norm_l2(residual[0::2], rescale=True)
         residual_energy = norm_l2(residual[1::2], rescale=True)
-        ressum = residual_energy + 1.0e6 * residual_mass
+        ressum = residual_energy ** 2.0 + (1.0e6 * residual_mass) ** 2.0
 
         if verbose >= 3:
             print(f"{'Rankine._iterate_conserv : ':40s}"
@@ -120,54 +108,36 @@ class Cycle:
         if knowns is None:
             raise ValueError('At least one property must be known for every state')
 
-        len_props = len(Property)
-        len_props_input = len(knowns)
-        len_exclude = len_props - len_props_input
+        len_knowns = len(knowns)
 
-        t0 = 25.0 + 273.15
-        p0 = 101.325e3
-        x0_complete = np.array(len(x0) * [
-            t0,
-            p0,
-            PropsSI('D', 'T', t0, 'P', p0, self._fluid),
-            PropsSI('H', 'T', t0, 'P', p0, self._fluid),
-            PropsSI('S', 'T', t0, 'P', p0, self._fluid),
-            PropsSI('Q', 'T', t0, 'P', p0, self._fluid),
-            1000.
-        ])
+        cycle = StateCycle(self._fluid, [i for i in range(self._graph.points)])
+        for i in range(self._graph.points):
+            for j in range(len_knowns):
+                cycle[i, knowns[j]] = x0[i * len_knowns + j]
+                cycle[i, Property.T.value] = 500.0
+                cycle[i, Property.Y.value] = 1000.0
 
-        for i in range(0, len(x0), len_props_input):
-            new_index = i + (i // len_props_input) * len_exclude
-            indices = [new_index + PropertyInfo.get_intkey(k) for k in knowns]
-            x0_complete[indices] = x0[i:i + len_props_input]
+        cycle.calculate_properties(props=('P', 'T'))
+        x0_complete = cycle._data
 
-        bounds = self._graph.points * [(1.0e3, 100.0e6), (1.0e3, 100.0e6), (1.0, 1000.0)]
-        indexes_use = np.array(
-            [[i * len_props + Property.P.value, i * len_props + Property.H.value, i * len_props + Property.Y.value] for
-             i in range(len(x0))], dtype=int).flatten()
+        sol_thermo = self._iterate_thermo(x0_complete, xtol=tol, verbose=verbose)
+
+        bounds = self._graph.points * [(1.0, 1000.0)]
         sol_conserv = minimize(
             self._iterate,
             bounds=bounds,
-            x0=x0_complete[indexes_use],
-            args=(tol, verbose,),
+            x0=x0_complete[:, Property.Y.value],
+            args=(verbose,),
             method='L-BFGS-B',
-            options={'ftol': tol / 10, 'maxiter': 1000}
+            # options={'ftol': (2.0 * tol ** 2.0) / 10, 'maxiter': 1000}
+            options={'ftol': 0.0, 'gtol': 0.0, 'maxiter': 100}
         )
 
-        sol_x = sol_conserv.x
-        cycle = StateCycle(self._fluid, [i for i in range(self._graph.points)])
-        for i in range(self._graph.points):
-            cycle[i, Property.P.value] = sol_x[i * 3 + 0]
-            cycle[i, Property.H.value] = sol_x[i * 3 + 1]
-            cycle[i, Property.Y.value] = sol_x[i * 3 + 2]
+        sol_thermo[:, Property.Y.value] = sol_conserv.x * 1000.0 / np.max(sol_conserv.x)
+        self._graph.states._data = sol_thermo
 
-        cycle.calculate_properties(props=('P', 'H'))
-
-        for index in range(self._graph.points):
-            self._graph.states[index] = cycle._data[index]
-
-        print(sol_conserv)
-        print(self._graph.states)
+        if verbose >= 3:
+            print(sol_conserv)
 
         # Post-processing
         for part in self._graph.nodes.values():
@@ -184,7 +154,7 @@ class Cycle:
                 case PartType.TURBINE:
                     self._work_turbines += y_part * part.deltaH
 
-        return self._graph.states
+        return self._graph.states, sol_conserv.fun
 
     @property
     def bwr(self):
