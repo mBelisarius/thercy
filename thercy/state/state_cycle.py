@@ -1,10 +1,10 @@
 import numpy as np
+from CoolProp.CoolProp import PropsSI
 from CoolProp.Plots import StateContainer
+from itertools import combinations
 
 from thercy.constants import Property, PropertyInfo
 from thercy.utils import list_like
-
-from .state_point import StatePoint
 
 
 class StateCycle:
@@ -27,23 +27,32 @@ class StateCycle:
         ----------
         fluid : str
             Fluid composition or mixture name.
-        data : dict[any: StatePoint], optional
+        data : dict[str: np.ndarray] | list[str], optional
             Dictionary containing state points of the cycle. Default: {}
 
         """
         if data is None:
             data = {}
 
-        self._data: dict[any: StatePoint] = data
+        if isinstance(data, (list, tuple, np.ndarray)):
+            data = {key: self.new_empty_state(2) for key in data}
+
+        if isinstance(data, dict):
+            if not np.all([d.size == len(Property) for d in data.values()]):
+                raise ValueError('All states must contain all properties')
+
+        self._data = np.array([data[k] for k in data.keys()], dtype=np.float64)
+        self._data_keys = {k: i for i, k in enumerate(data.keys())}
         self._fluid: str = fluid
 
     def __len__(self):
         """Get the number of state points in the cycle."""
-        return len(self._data)
+        return len(self._data_keys)
 
     def __iter__(self):
         """Iterator over state points in the cycle."""
-        return iter(self._data)
+        # TODO: Test
+        return iter(self._data_keys)
 
     def __str__(self):
         """String representation of the cycle's state points."""
@@ -56,10 +65,10 @@ class StateCycle:
             row.append(f"{label:>16s}")
         out += '  '.join(row) + '\n'
 
-        for k in self._data.keys():
+        for k, i in self._data_keys.items():
             row = [f"{str(k):>5s}"]
             for prop in Property:
-                value = self._data[k][prop.name]
+                value = self._data[i][prop.value]
                 if value is not None:
                     row.append(f"{value:16.3f}")
                 else:
@@ -74,7 +83,7 @@ class StateCycle:
 
         Parameters
         ----------
-        key : any | tuple
+        key : str | tuple
             Key to access the state point.
 
         Returns
@@ -94,7 +103,7 @@ class StateCycle:
             elif len_var == 2:
                 return self._get_float(key)
             else:
-                raise IndexError("Index with invalid length.")
+                raise IndexError("Too many indexes to unpack.")
 
         return self._get_point(key)
 
@@ -112,7 +121,9 @@ class StateCycle:
         value : float
 
         """
-        return self._data[key[0]][key[1]]
+        index_state = self._data_keys[key[0]]
+        index_prop = PropertyInfo.get_intkey(key[1])
+        return self._data[index_state, index_prop]
 
     def _get_point(self, key):
         """
@@ -120,7 +131,7 @@ class StateCycle:
 
         Parameters
         ----------
-        key : any
+        key : str
             Key to access the state point.
 
         Returns
@@ -128,7 +139,7 @@ class StateCycle:
         value : StatePoint
 
         """
-        return self._data[key]
+        return self._data[self._data_keys[key]]
 
     def __setitem__(self, key, value):
         """
@@ -136,9 +147,9 @@ class StateCycle:
 
         Parameters
         ----------
-        key : any | tuple
+        key : str | tuple
             Key to access the state point.
-        value : StatePoint | float
+        value : np.ndarray | float
             State point or float value to assign.
 
         Raises
@@ -176,10 +187,16 @@ class StateCycle:
         if not isinstance(value, (int, float)):
             raise TypeError('Value is not a numeric type')
 
-        if key[0] not in self._data:
-            self._data[key[0]] = StatePoint(self._fluid)
+        if key[0] not in self._data_keys.keys():
+            self._data_keys[key[0]] = len(self._data_keys)
+            if len(self._data) > 0:
+                self._data = np.append(self._data, self.new_empty_state(2), axis=0)
+            else:
+                self._data = self.new_empty_state(2)
 
-        self._data[key[0]][key[1]] = value
+        index_state = self._data_keys[key[0]]
+        index_prop = PropertyInfo.get_intkey(key[1])
+        self._data[index_state, index_prop] = value
 
     def _set_point(self, key, value):
         """
@@ -187,9 +204,9 @@ class StateCycle:
 
         Parameters
         ----------
-        key : any
+        key : str
             Key to access the state point.
-        value : StatePoint
+        value : np.ndarray
             State point to assign.
 
         Raises
@@ -197,10 +214,20 @@ class StateCycle:
         TypeError if the value type is invalid.
 
         """
-        if not isinstance(value, StatePoint):
-            raise TypeError('Value is not a StatePoint')
+        if value is None:
+            value = self.new_empty_state(2)
 
-        self._data[key] = value
+        if value.size != len(Property):
+            raise ValueError('State must contain all properties')
+
+        if key not in self._data_keys.keys():
+            self._data_keys[key] = len(self._data_keys)
+            if len(self._data) > 0:
+                self._data = np.append(self._data, self.new_empty_state(2), axis=0)
+            else:
+                self._data = self.new_empty_state(2)
+
+        self._data[self._data_keys[key]] = value
 
     @property
     def fluid(self):
@@ -209,15 +236,24 @@ class StateCycle:
 
     @property
     def first(self):
-        """Get the first state point in the cycle."""
+        """Get the first state in the cycle."""
         if self._data:
-            return next(iter(self._data.values()))
+            return self._data[0]
 
     @property
     def last(self):
-        """Get the last state point in the cycle."""
+        """Get the last state in the cycle."""
         if self._data:
-            return next(iter(reversed(self._data.values())))
+            return self._data[-1]
+
+    @staticmethod
+    def new_empty_state(dim=1):
+        if dim == 1:
+            return np.full(len(Property), np.nan, dtype=np.float64)
+        elif dim == 2:
+            return np.full((1, len(Property)), np.nan, dtype=np.float64)
+        else:
+            raise ValueError('Invalid dimension')
 
     def to_state_container(self):
         """
@@ -231,17 +267,92 @@ class StateCycle:
         """
         container = StateContainer()
 
-        for i, k in enumerate(self._data.keys()):
+        for i, k in enumerate(self._data_keys.keys()):
             for prop in Property:
                 if prop.name not in ['Y']:
                     container[i, prop.name] = self[k, prop.name]
 
         return container
 
-    def calculate_properties(self):
-        """Calculate properties for all state points in the cycle."""
-        for sp in self._data.values():
-            sp.properties()
+    @staticmethod
+    def calculate_props(state, fluid, prop1=None, prop2=None, calc=None, exclude=None):
+        """
+        Calculate missing properties based on known ones.
+
+        Parameters
+        ----------
+        state : np.ndarray
+            State to be calculated.
+        prop1 : Property | str | int, optional
+            First known property. Default: None
+        prop2 : Property | str | int, optional
+            Second known property. Default: None
+        calc : list[str], optional
+            Properties to calculate. Default: all
+        exclude : list[str], optional
+            Properties to exclude from calculation. Default: None
+
+        """
+        # TODO: Move definition of not thermodynamic properties to `constants`
+        not_thermo = ['Y']
+
+        if calc is None:
+            calc = [prop.name for prop in Property
+                    if prop.name not in (prop1, prop2)]
+
+        if exclude is None:
+            exclude = []
+
+        knowns = {Property(i).name: v for i, v in enumerate(state) if v is not None}
+
+        if prop1 is not None and prop2 is not None:
+            pairs = [(prop1, prop2)]
+        elif prop1 is not None:
+            pairs = [(prop1, p) for p in knowns.keys() if p != prop1 and p not in not_thermo]
+        else:
+            pairs = combinations(knowns.keys(), 2)
+
+        to_calc = [prop for prop in calc
+                   if prop not in not_thermo
+                   and prop not in exclude]
+
+        while len(to_calc) > 0:
+            prop = to_calc.pop()
+
+            for pair in pairs:
+                if prop in pair:
+                    continue
+
+                try:
+                    index_prop = PropertyInfo.get_intkey(prop)
+                    state[index_prop] = PropsSI(
+                        prop,
+                        pair[0],
+                        knowns[pair[0]],
+                        pair[1],
+                        knowns[pair[1]],
+                        fluid
+                    )
+
+                except ValueError as e:
+                    pass
+
+    def calculate_properties(self, key):
+        """
+        Calculate properties for all state points in the cycle.
+
+        Parameters
+        ----------
+        key : str | list[str]
+            Key of the states to be calculated.
+
+        """
+        if not list_like(key):
+            key = [key]
+
+        for k in key:
+            index_state = self._data_keys[k]
+            self.calculate_props(self._data[index_state], self._fluid)
 
     def constant_properties(self, key1, key2, tol=1e-7):
         """
@@ -249,9 +360,9 @@ class StateCycle:
 
         Parameters
         ----------
-        key1 : any
+        key1 : str
             Key of the first state point.
-        key2 : any
+        key2 : str
             Key of the second state point.
         tol : float, optional
             Tolerance for constant property comparison. Default: 1e-4
@@ -262,9 +373,12 @@ class StateCycle:
             List of constant properties.
 
         """
-        return [prop for prop in Property if abs(self[key1, prop.name] - self[key2, prop.name]) <= tol]
+        index_state1 = self._data_keys[key1]
+        index_state2 = self._data_keys[key2]
+        return [prop for prop in Property if abs(self[index_state1, prop.value] - self[index_state2, prop.value]) <= tol]
 
     def cloud_points(self, n=50, close_envelope=False, precise=False):
+        # TODO: Fix
         """
         Generate cloud points between consecutive state points.
 

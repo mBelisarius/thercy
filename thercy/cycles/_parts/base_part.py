@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from thercy.constants import PartType
-from thercy.state import StateGraph, StatePoint
+from thercy.constants import PartType, Property
+from thercy.state import StateGraph
 
 
 class Connection:
@@ -108,23 +108,25 @@ class BasePart(ABC):
 
         return None
 
-    def solve_conserv(self, inlets_state: dict[str, StatePoint], outlets_state: dict[str, StatePoint]):
+    def solve_conserv(self, graph: StateGraph, inlets: list[str], outlets: list[str]):
         residual = [0.0, 0.0]
 
         for conn in self.connections:
             y_inl = 0.0
             h_inl = 0.0
-            for label, state in inlets_state.items():
+            for label in inlets:
+                state = graph.get_state((label, self._label))
                 if label in [p.label for p in conn.inlets]:
-                    y_inl += state['Y']
-                    h_inl += state['Y'] * state['H']
+                    y_inl += state[Property.Y.value]
+                    h_inl += state[Property.Y.value] * state[Property.H.value]
 
             y_outl = 0.0
             h_outl = 0.0
-            for label, state in outlets_state.items():
+            for label in outlets:
+                state = graph.get_state((self._label, label))
                 if label in [p.label for p in conn.outlets]:
-                    y_outl += state['Y']
-                    h_outl += state['Y'] * state['H']
+                    y_outl += state[Property.Y.value]
+                    h_outl += state[Property.Y.value] * state[Property.H.value]
 
             y = (y_inl + y_outl) / 2.0
             residual[0] += abs(y_outl - y_inl)
@@ -133,5 +135,5 @@ class BasePart(ABC):
         return residual
 
     @abstractmethod
-    def solve(self, inlets: dict[str, StatePoint]):
+    def solve(self, graph: StateGraph, inlets: list[str]):
         raise NotImplementedError()

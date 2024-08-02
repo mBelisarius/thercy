@@ -1,5 +1,5 @@
-from thercy.constants import PartType, PropertyInfo
-from thercy.state import StatePoint
+from thercy.constants import PartType, Property, PropertyInfo
+from thercy.state import StateCycle, StateGraph
 
 from .base_part import BasePart, Connection
 
@@ -31,19 +31,21 @@ class SteamGenerator(BasePart):
     def deltaH(self):
         return self._deltaH
 
-    def solve(self, inlets: dict[str, StatePoint]):
+    def solve(self, graph: StateGraph, inlets: list[str]):
         outlets = {}
 
-        inlet_label, inlet_state = next(iter(inlets.items()))
-        outlet_state = inlet_state.clone()
+        inlet_label = inlets[0]
+        inlet_state = graph.get_state((inlet_label, self.label))
 
-        outlet_state[self._prop] = self._value
-        outlet_state['P'] = inlet_state['P']
-        outlet_state.properties(self._prop, 'P')
+        outlet_state = StateCycle.new_empty_state()
+        outlet_state[PropertyInfo.get_intkey(self._prop)] = self._value
+        outlet_state[Property.P.value] = inlet_state[Property.P.value]
+        StateCycle.calculate_props(outlet_state, graph.fluid, self._prop, 'P')
+        outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
 
-        self._deltaH = outlet_state['H'] - inlet_state['H']
+        self._deltaH = outlet_state[Property.H.value] - inlet_state[Property.H.value]
 
         for outlet in self.get_outlets(inlet_label):
-            outlets[outlet.label] = outlet_state.clone()
+            outlets[outlet.label] = outlet_state.copy()
 
         return outlets

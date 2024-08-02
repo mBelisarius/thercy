@@ -2,7 +2,6 @@ import numpy as np
 
 from thercy.utils import list_like
 from .state_cycle import StateCycle
-from .state_point import StatePoint
 
 
 class StateGraph:
@@ -77,6 +76,10 @@ class StateGraph:
     def edges(self):
         """Get the edges in the graph."""
         return self._edges
+
+    @property
+    def fluid(self):
+        return self.states.fluid
 
     def get_edge_index(self, edge):
         """
@@ -160,7 +163,7 @@ class StateGraph:
                 if edge not in self._edges:
                     self._edges.append(edge)
                     self._edges_map[edge] = edge_index
-                    self.states[edge_index] = StatePoint(self.states.fluid)
+                    self.states[edge_index] = None
 
             for outlet in conn.outlets:
                 edge = (part.label, outlet.label)
@@ -168,7 +171,7 @@ class StateGraph:
                 if edge not in self._edges:
                     self._edges.append(edge)
                     self._edges_map[edge] = edge_index
-                    self.states[edge_index] = StatePoint(self.states.fluid)
+                    self.states[edge_index] = None
 
     def cloud_points(self, n=50, precise=False):
         """

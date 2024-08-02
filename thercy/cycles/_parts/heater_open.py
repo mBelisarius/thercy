@@ -1,5 +1,5 @@
-from thercy.constants import PartType
-from thercy.state import StatePoint
+from thercy.constants import PartType, Property
+from thercy.state import StateCycle, StateGraph
 
 from .base_part import BasePart, Connection
 
@@ -25,24 +25,26 @@ class HeaterOpen(BasePart):
     def deltaH(self):
         return self._deltaH
 
-    def solve(self, inlets: dict[str, StatePoint]):
+    def solve(self, graph: StateGraph, inlets: list[str]):
         outlets = {}
-        outlet_state = StatePoint(next(iter(inlets.values())).fluid)
 
         partial_p = 0.0
         partial_y = 0.0
-        for inlet in inlets.values():
-            partial_p += inlet['Y'] * inlet['P']
-            partial_y += inlet['Y']
+        for inlet in inlets:
+            state = graph.get_state((inlet, self.label))
+            partial_p += state[Property.Y.value] * state[Property.P.value]
+            partial_y += state[Property.Y.value]
 
-        outlet_state['P'] = partial_p / partial_y
-        outlet_state['Q'] = 0.0
-        outlet_state.properties('P', 'Q')
+        outlet_state = StateCycle.new_empty_state()
+        outlet_state[Property.P.value] = partial_p / partial_y
+        outlet_state[Property.Q.value] = 0.0
+        StateCycle.calculate_props(outlet_state, graph.fluid, 'P', 'Q')
+        outlet_state[Property.Y.value] = partial_y
 
         # outlet_state['Y'] = partial_y
 
         # Only one outlet
-        for outlet in self.get_outlets(next(iter(inlets.keys()))):
-            outlets[outlet.label] = outlet_state.clone()
+        for outlet in self.get_outlets(inlets[0]):
+            outlets[outlet.label] = outlet_state.copy()
 
         return outlets

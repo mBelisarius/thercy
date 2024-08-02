@@ -37,24 +37,25 @@ class Cycle:
         for index in range(len_states):
             index_begin = index * len_props
             index_end = index_begin + len_props
-            self._graph.states[index].from_array(x[index_begin:index_end])
+            self._graph.states[index] = x[index_begin:index_end]
 
         for part in self._graph.nodes.values():
-            inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
-            sol = self._graph[part.label].solve(inlets_state)
+            # inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
+            inlets = [p.label for p in part.inlet_parts]
+            sol = self._graph[part.label].solve(self._graph, inlets)
 
             for label_outlet, value in sol.items():
                 edge = (part.label, label_outlet)
                 edge_index = self._graph.get_edge_index(edge)
                 for prop in Property:
                     if value[prop.value] is not None:
-                        self._graph.states[edge_index][prop.value] = value[prop.value]
+                        self._graph.states[edge_index, prop.value] = value[prop.value]
 
         for index in range(len_states):
             index_begin = index * len_props
             index_end = index_begin + len_props
             residual[index_begin:index_end - 1] = (x[index_begin:index_end - 1]
-                                                   - self._graph.states[index].to_array(['Y']))
+                                                   - self._graph.states[index][:-1])
 
         return residual
 
@@ -71,7 +72,7 @@ class Cycle:
         for index in range(len_states):
             index_begin = index * len_props
             index_end = index_begin + len_props
-            self._graph.states[index].from_array(sol.x[index_begin:index_end])
+            self._graph.states[index] = sol.x[index_begin:index_end]
 
         if verbose >= 3:
             print(f"{'Rankine._iterate_thermo : ':40s}"
@@ -83,12 +84,14 @@ class Cycle:
         residual = np.zeros(2 * len(self._graph))
 
         for index in range(self._graph.points):
-            self._graph.states[index]['Y'] = y[index]
+            self._graph.states[index, 'Y'] = y[index]
 
         for i, part in enumerate(self._graph.nodes.values()):
-            inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
-            outlets_state = {p.label: self._graph.get_state((part.label, p.label)) for p in part.outlet_parts}
-            residual[2 * i:2 * i + 2] = self._graph[part.label].solve_conserv(inlets_state, outlets_state)
+            # inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
+            # outlets_state = {p.label: self._graph.get_state((part.label, p.label)) for p in part.outlet_parts}
+            inlets = [p.label for p in part.inlet_parts]
+            outlets = [p.label for p in part.outlet_parts]
+            residual[2 * i:2 * i + 2] = self._graph[part.label].solve_conserv(self._graph, inlets, outlets)
 
         return residual
 
@@ -100,12 +103,12 @@ class Cycle:
 
         residual_mass = norm_l2(residual[0::2], rescale=True)
         residual_energy = norm_l2(residual[1::2], rescale=True)
+        ressum = residual_energy + 1.0e6 * residual_mass
 
         if verbose >= 3:
             print(f"{'Rankine._iterate_conserv : ':40s}"
-                  f"{residual_energy:3e} | {residual_mass:.3e}")
+                  f"{ressum:.3e} | {residual_mass:.3e} | {residual_energy:3e}")
 
-        ressum = residual_energy + 1.0e6 * residual_mass
         return ressum
 
     def solve(self, x0, knowns=None, tol=1e-4, verbose=0):
@@ -145,14 +148,14 @@ class Cycle:
         for index in range(self._graph.points):
             index_begin = index * len_props
             index_end = index_begin + len_props
-            self._graph.states[index].from_array(sol_x[index_begin:index_end])
+            self._graph.states[index] = sol_x[index_begin:index_end]
 
         print(sol_conserv)
         print(self._graph.states)
 
         # Post-processing
         for part in self._graph.nodes.values():
-            y_part = sum(self._graph.states[self._graph.get_edge_index((inlet.label, part.label))]['Y']
+            y_part = sum(self._graph.get_state((inlet.label, part.label))[Property.Y]
                          for inlet in part.inlet_parts)
 
             match part.type:
