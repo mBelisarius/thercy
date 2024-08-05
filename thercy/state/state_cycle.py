@@ -53,7 +53,7 @@ class StateCycle:
         if data is None:
             data = {}
 
-        self._data = np.array([data[k] for k in data.keys()], dtype=np.float64)
+        self._matrix = np.array([data[k] for k in data.keys()], dtype=np.float64)
         self._data_keys = {k: i for i, k in enumerate(data.keys())}
         self._fluid: str = fluid
 
@@ -80,7 +80,7 @@ class StateCycle:
         for k, i in self._data_keys.items():
             row = [f"{str(k):>5s}"]
             for prop in Property:
-                value = self._data[i][prop.value]
+                value = self._matrix[i][prop.value]
                 if value is not None:
                     row.append(f"{value:16.3f}")
                 else:
@@ -135,7 +135,7 @@ class StateCycle:
         """
         index_state = self._data_keys[key[0]]
         index_prop = PropertyInfo.get_intkey(key[1])
-        return self._data[index_state, index_prop]
+        return self._matrix[index_state, index_prop]
 
     def _get_point(self, key):
         """
@@ -151,7 +151,7 @@ class StateCycle:
         value : StatePoint
 
         """
-        return self._data[self._data_keys[key]]
+        return self._matrix[self._data_keys[key]]
 
     def __setitem__(self, key, value):
         """
@@ -201,14 +201,14 @@ class StateCycle:
 
         if key[0] not in self._data_keys.keys():
             self._data_keys[key[0]] = len(self._data_keys)
-            if len(self._data) > 0:
-                self._data = np.append(self._data, self.new_empty_state(2), axis=0)
+            if len(self._matrix) > 0:
+                self._matrix = np.append(self._matrix, self.new_empty_state(2), axis=0)
             else:
-                self._data = self.new_empty_state(2)
+                self._matrix = self.new_empty_state(2)
 
         index_state = self._data_keys[key[0]]
         index_prop = PropertyInfo.get_intkey(key[1])
-        self._data[index_state, index_prop] = value
+        self._matrix[index_state, index_prop] = value
 
     def _set_point(self, key, value):
         """
@@ -234,12 +234,12 @@ class StateCycle:
 
         if key not in self._data_keys.keys():
             self._data_keys[key] = len(self._data_keys)
-            if len(self._data) > 0:
-                self._data = np.append(self._data, self.new_empty_state(2), axis=0)
+            if len(self._matrix) > 0:
+                self._matrix = np.append(self._matrix, self.new_empty_state(2), axis=0)
             else:
-                self._data = self.new_empty_state(2)
+                self._matrix = self.new_empty_state(2)
 
-        self._data[self._data_keys[key]] = value
+        self._matrix[self._data_keys[key]] = value
 
     @property
     def fluid(self):
@@ -247,16 +247,32 @@ class StateCycle:
         return self._fluid
 
     @property
+    def matrix(self):
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        """Set the matrix of state points."""
+        if isinstance(value, np.ndarray):
+            if value.ndim != 2:
+                raise ValueError('Matrix must have 2 dimensions')
+            if value.shape[1] != len(Property):
+                raise ValueError('Matrix columns must match number of properties')
+            self._matrix = value
+        else:
+            raise TypeError('Matrix must be a numpy array')
+
+    @property
     def first(self):
         """Get the first state in the cycle."""
-        if self._data:
-            return self._data[0]
+        if self._matrix:
+            return self._matrix[0]
 
     @property
     def last(self):
         """Get the last state in the cycle."""
-        if self._data:
-            return self._data[-1]
+        if self._matrix:
+            return self._matrix[-1]
 
     @staticmethod
     def new_empty_state(dim=1):
@@ -370,7 +386,7 @@ class StateCycle:
 
         for k in key:
             index_state = self._data_keys[k]
-            self.calculate_props(self._data[index_state], self._fluid, *props)
+            self.calculate_props(self._matrix[index_state], self._fluid, *props)
 
     def constant_properties(self, key1, key2, tol=1e-7):
         """
@@ -420,12 +436,12 @@ class StateCycle:
         """
         cloud = StateCycle(self._fluid)
 
-        for i, (key1, state1) in enumerate(self._data.items()):
+        for i, (key1, state1) in enumerate(self._matrix.items()):
             # Close the cycle envelope
-            if i + 1 < len(self._data):
-                key2, state2 = list(self._data.items())[i + 1]
+            if i + 1 < len(self._matrix):
+                key2, state2 = list(self._matrix.items())[i + 1]
             elif close_envelope:
-                key2, state2 = list(self._data.items())[0]
+                key2, state2 = list(self._matrix.items())[0]
             else:
                 break
 

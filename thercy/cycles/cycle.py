@@ -7,6 +7,36 @@ from thercy.state import StateCycle, StateGraph
 from thercy.utils import norm_l1, norm_l2, norm_lmax, norm_lp
 
 
+class CycleResult:
+    def __init__(self, x, success, fun, nit):
+        self._x = x
+        self._success = success
+        self._fun = fun
+        self._nit = nit
+
+    def __str__(self):
+        return (f"{'x':>20}: {self._x}\n"
+                f"{'success':>20}: {self._success}\n"
+                f"{'fun':>20}: {self._fun}\n"
+                f"{'nit':>20}: {self._nit}")
+
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def success(self):
+        return self._success
+
+    @property
+    def fun(self):
+        return self._fun
+
+    @property
+    def nit(self):
+        return self._nit
+
+
 class Cycle:
     def __init__(self, fluid: str, parts: StateGraph):
         self._graph: StateGraph = parts
@@ -23,12 +53,39 @@ class Cycle:
         return str(self._graph)
 
     @property
+    def bwr(self):
+        return self._work_pumps / -self._work_turbines
+
+    @property
+    def cycle(self):
+        return self._graph.states
+
+    @property
+    def efficiency(self):
+        return self.work / self.heat_input
+
+    @property
     def graph(self):
         return self._graph
 
     @property
+    def heat_input(self):
+        return self._heat_input
+
+    @property
+    def heat_output(self):
+        return -self._heat_output
+
+    def massflow(self, power):
+        return power / self.work
+
+    @property
     def states(self):
         return self._graph.states
+
+    @property
+    def work(self):
+        return -(self._work_pumps + self._work_turbines)
 
     def _equation_thermo(self, x: np.ndarray):
         len_props = len(Property)
@@ -39,7 +96,6 @@ class Cycle:
             self._graph.states[index] = x[index]
 
         for part in self._graph.nodes.values():
-            # inlets_state = {p.label: self._graph.get_state((p.label, part.label)) for p in part.inlet_parts}
             inlets = [p.label for p in part.inlet_parts]
             sol = self._graph[part.label].solve(self._graph, inlets)
 
@@ -57,15 +113,14 @@ class Cycle:
 
         return residual
 
-    def _iterate_thermo(self, x0: np.ndarray, xtol=1e-4, maxfev=10, verbose=0):
+    def _iterate_thermo(self, x0: np.ndarray, fatol=1e-4, maxfev=10, verbose=0):
         sol = root(
             self._equation_thermo,
             x0,
             method='df-sane',
-            options={'fatol': xtol, 'maxfev': maxfev}
+            options={'fatol': fatol, 'maxfev': maxfev}
         )
 
-        len_props = len(Property)
         len_states = self._graph.points
         for index in range(len_states):
             self._graph.states[index] = sol.x[index]
@@ -90,7 +145,7 @@ class Cycle:
         return residual
 
     def _iterate(self, y: np.ndarray, verbose=0):
-        # We already have sol_thermo == self._graph.states._data, so no need to update
+        # We already have sol_thermo == self._graph.states.matrix, so no need to update
         y *= 1000.0 / np.max(y)
         residual = self._equation_conserv(y)
 
@@ -104,29 +159,35 @@ class Cycle:
 
         return ressum
 
-    def solve(self, x0, knowns=None, tol=1e-4, verbose=0):
-        if knowns is None:
-            raise ValueError('At least one property must be known for every state')
+    def solve(self, x0, x0props, fatol=1e-4, verbose=0):
+        len_knowns = len(x0props)
 
-        len_knowns = len(knowns)
+        if len_knowns < 2:
+            raise ValueError("x0 must have at least two property guesses.")
 
         cycle = StateCycle(self._fluid, [i for i in range(self._graph.points)])
         for i in range(self._graph.points):
             for j in range(len_knowns):
-                cycle[i, knowns[j]] = x0[i * len_knowns + j]
-                cycle[i, Property.T.value] = 500.0
                 cycle[i, Property.Y.value] = 1000.0
+                if x0.ndim == 1:
+                    cycle[i, x0props[j]] = x0[i * len_knowns + j]
+                elif x0.ndim == len_knowns:
+                    cycle[i, x0props[j]] = x0[i, j]
+                elif x0.ndim == self._graph.points:
+                    cycle[i, x0props[j]] = x0[j, i]
+                else:
+                    raise ValueError("x0 must be in a valid shape.")
 
-        cycle.calculate_properties(props=('P', 'T'))
-        x0_complete = cycle._data
+        cycle.calculate_properties(props=x0props)
 
-        sol_thermo = self._iterate_thermo(x0_complete, xtol=tol, verbose=verbose)
+        sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
+        cycle.matrix = sol_thermo
 
         bounds = self._graph.points * [(1.0, 1000.0)]
         sol_conserv = minimize(
             self._iterate,
             bounds=bounds,
-            x0=x0_complete[:, Property.Y.value],
+            x0=cycle.matrix[:, Property.Y.value],
             args=(verbose,),
             method='L-BFGS-B',
             # options={'ftol': (2.0 * tol ** 2.0) / 10, 'maxiter': 1000}
@@ -134,10 +195,10 @@ class Cycle:
         )
 
         sol_thermo[:, Property.Y.value] = sol_conserv.x * 1000.0 / np.max(sol_conserv.x)
-        self._graph.states._data = sol_thermo
-
-        if verbose >= 3:
-            print(sol_conserv)
+        self._graph.states.matrix = sol_thermo
+        cycle.matrix = sol_thermo
+        residual = np.sqrt(sol_conserv.fun / 2.0)
+        sol = CycleResult(cycle, residual < fatol, residual, sol_conserv.nit)
 
         # Post-processing
         for part in self._graph.nodes.values():
@@ -154,31 +215,4 @@ class Cycle:
                 case PartType.TURBINE:
                     self._work_turbines += y_part * part.deltaH
 
-        return self._graph.states, sol_conserv.fun
-
-    @property
-    def bwr(self):
-        return self._work_pumps / -self._work_turbines
-
-    @property
-    def cycle(self):
-        return self._cycle
-
-    @property
-    def efficiency(self):
-        return self.work / self._heat_input
-
-    @property
-    def heat_input(self):
-        return self._heat_input
-
-    @property
-    def heat_output(self):
-        return -self._heat_output
-
-    def massflow(self, power):
-        return power / self.work
-
-    @property
-    def work(self):
-        return -(self._work_pumps + self._work_turbines)
+        return sol
