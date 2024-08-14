@@ -37,7 +37,7 @@ class Trap(BasePart):
         outlet_state[Property.P.value] = self._p_out
         outlet_state[Property.H.value] = inlet_state[Property.H.value]
         StateCycle.calculate_props(outlet_state, graph.fluid, 'P', 'H')
-        outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
+        # outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
 
         for outlet in self.get_outlets(inlet_label):
             outlets[outlet.label] = outlet_state.copy()

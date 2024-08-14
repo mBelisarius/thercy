@@ -1,6 +1,8 @@
 import numpy as np
 from CoolProp.CoolProp import PropsSI
+from scipy.linalg import lstsq, solve
 from scipy.optimize import minimize, root
+from scipy.sparse.linalg import lsmr, lsqr, bicgstab
 
 from thercy.constants import PartType, Property, PropertyInfo
 from thercy.state import StateCycle, StateGraph
@@ -103,7 +105,7 @@ class Cycle:
                 edge = (part.label, label_outlet)
                 edge_index = self._graph.get_edge_index(edge)
                 for prop in Property:
-                    if value[prop.value] is not None:
+                    if value[prop.value] is not None and not np.isnan(value[prop.value]):
                         self._graph.states[edge_index, prop.value] = value[prop.value]
 
         for index in range(len_states):
@@ -144,20 +146,57 @@ class Cycle:
 
         return residual
 
-    def _iterate(self, y: np.ndarray, verbose=0):
-        # We already have sol_thermo == self._graph.states.matrix, so no need to update
-        y *= 1000.0 / np.max(y)
-        residual = self._equation_conserv(y)
+    def _iterate(self, y0):
+        parts_map = {i: label for i, label in enumerate(self._graph.nodes)}
+        coeffs_mass = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
+        coeffs_energy = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
 
-        residual_mass = norm_l2(residual[0::2], rescale=True)
-        residual_energy = norm_l2(residual[1::2], rescale=True)
-        ressum = residual_energy ** 2.0 + (1.0e6 * residual_mass) ** 2.0
+        index_mass = 0
+        index_energy = 0
+        for label in parts_map.values():
+            part = self._graph[label]
+            conns = part.connections
+            for con in conns:
+                for inlet in con.inlets:
+                    edge_index = self._graph.get_edge_index((inlet.label, label))
+                    coeffs_mass[index_mass, edge_index] = -1.0e6
+                for outlet in con.outlets:
+                    edge_index = self._graph.get_edge_index((label, outlet.label))
+                    coeffs_mass[index_mass, edge_index] = 1.0e6
+                index_mass += 1
 
-        if verbose >= 3:
-            print(f"{'Rankine._iterate_conserv : ':40s}"
-                  f"{ressum:.3e} | {residual_mass:.3e} | {residual_energy:3e}")
+            for inlet in part.inlet_parts:
+                edge_index = self._graph.get_edge_index((inlet.label, label))
+                coeffs_energy[index_energy, edge_index] = -self._graph.states.matrix[edge_index, Property.H.value]
+            for outlet in part.outlet_parts:
+                edge_index = self._graph.get_edge_index((label, outlet.label))
+                coeffs_energy[index_energy, edge_index] = self._graph.states.matrix[edge_index, Property.H.value]
+            index_energy += 1
 
-        return ressum
+        coeffs = coeffs_mass
+
+        non_redundant = np.argsort([np.count_nonzero(coeffs_energy[i, :]) for i in range(len(self._graph))], kind='stable')
+        necessary_count = self._graph.points - np.count_nonzero([np.count_nonzero(coeffs_mass[i, :]) for i in range(self._graph.points)])
+        if necessary_count > 0:
+            necessary_indexes = non_redundant[-necessary_count:]
+            coeffs[-necessary_count:] = coeffs_energy[necessary_indexes]
+
+        rhs = np.zeros(self._graph.points)
+        for i in range(necessary_count):
+            label = parts_map[necessary_indexes[i]]
+            rhs[len(self._graph) + i] = self._graph[label].deltaH
+
+        # Define the boundary condition by the penalty method
+        # y0 = 1000.0
+        coeffs[0, 0] = 1.0e16
+        rhs[0] = 1000.0 * 1.0e16
+
+        # x, res, rnk, s = lstsq(coeffs, rhs, check_finite=False)
+        x, itn = bicgstab(coeffs, rhs, x0=y0, rtol=0.0, atol=1.0e-4)
+        np.clip(x, a_min=1.0e-7, a_max=None, out=x)  # No negative mass flow allowed
+        normr = np.linalg.norm(coeffs @ x - rhs)
+
+        return x, normr, itn
 
     def solve(self, x0, x0props, fatol=1e-4, verbose=0):
         len_knowns = len(x0props)
@@ -182,37 +221,31 @@ class Cycle:
 
         sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
         cycle.matrix = sol_thermo
-
-        bounds = self._graph.points * [(1.0, 1000.0)]
-        sol_conserv = minimize(
-            self._iterate,
-            bounds=bounds,
-            x0=cycle.matrix[:, Property.Y.value],
-            args=(verbose,),
-            method='L-BFGS-B',
-            # options={'ftol': (2.0 * tol ** 2.0) / 10, 'maxiter': 1000}
-            options={'ftol': 0.0, 'gtol': 0.0, 'maxiter': 100}
-        )
-
-        sol_thermo[:, Property.Y.value] = sol_conserv.x * 1000.0 / np.max(sol_conserv.x)
         self._graph.states.matrix = sol_thermo
+
+        sol_conserv, conserv_res, conserv_nit = self._iterate(cycle.matrix[:, Property.Y.value])
+        sol_thermo[:, Property.Y.value] = sol_conserv * 1000.0 / np.max(sol_conserv)
         cycle.matrix = sol_thermo
-        residual = np.sqrt(sol_conserv.fun / 2.0)
-        sol = CycleResult(cycle, residual < fatol, residual, sol_conserv.nit)
+        self._graph.states.matrix = sol_thermo
+
+        sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
+        sol_thermo[:, Property.Y.value] = sol_conserv * 1000.0 / np.max(sol_conserv)
+        cycle.matrix = sol_thermo
+        self._graph.states.matrix = sol_thermo
+
+        residual = conserv_res
+        sol = CycleResult(cycle, residual < fatol, residual, conserv_nit)
 
         # Post-processing
         for part in self._graph.nodes.values():
-            y_part = sum(self._graph.get_state((inlet.label, part.label))[Property.Y.value]
-                         for inlet in part.inlet_parts)
-
             match part.type:
                 case PartType.CONDENSATOR:
-                    self._heat_output += y_part * part.deltaH
+                    self._heat_output += part.deltaH
                 case PartType.HEAT_SOURCE:
-                    self._heat_input += y_part * part.deltaH
+                    self._heat_input += part.deltaH
                 case PartType.PUMP:
-                    self._work_pumps += y_part * part.deltaH
+                    self._work_pumps += part.deltaH
                 case PartType.TURBINE:
-                    self._work_turbines += y_part * part.deltaH
+                    self._work_turbines += part.deltaH
 
         return sol

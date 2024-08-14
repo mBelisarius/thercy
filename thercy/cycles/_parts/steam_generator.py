@@ -41,9 +41,9 @@ class SteamGenerator(BasePart):
         outlet_state[PropertyInfo.get_intkey(self._prop)] = self._value
         outlet_state[Property.P.value] = inlet_state[Property.P.value]
         StateCycle.calculate_props(outlet_state, graph.fluid, self._prop, 'P')
-        outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
+        # outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
 
-        self._deltaH = outlet_state[Property.H.value] - inlet_state[Property.H.value]
+        self._deltaH = (outlet_state[Property.H.value] - inlet_state[Property.H.value]) * inlet_state[Property.Y.value]
 
         for outlet in self.get_outlets(inlet_label):
             outlets[outlet.label] = outlet_state.copy()

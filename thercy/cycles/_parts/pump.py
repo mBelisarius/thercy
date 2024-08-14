@@ -39,12 +39,12 @@ class Pump(BasePart):
         outlet_state[Property.P.value] = self._p_out
         outlet_state[Property.S.value] = inlet_state[Property.S.value]
         StateCycle.calculate_props(outlet_state, graph.fluid, 'P', 'S')
-        outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
+        # outlet_state[Property.Y.value] = inlet_state[Property.Y.value]
 
         outlet_state[Property.H.value] = inlet_state[Property.H.value] + (outlet_state[Property.H.value] - inlet_state[Property.H.value]) / self._eta
         StateCycle.calculate_props(outlet_state, graph.fluid, 'P', 'H')
 
-        self._deltaH = outlet_state[Property.H.value] - inlet_state[Property.H.value]
+        self._deltaH = (outlet_state[Property.H.value] - inlet_state[Property.H.value]) * inlet_state[Property.Y.value]
 
         for outlet in self.get_outlets(inlet_label):
             outlets[outlet.label] = outlet_state.copy()

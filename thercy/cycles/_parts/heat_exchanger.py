@@ -56,15 +56,15 @@ class HeatExchanger(BasePart):
         outlet_cond_state[Property.Q.value] = 0.0
         outlet_cond_state[Property.P.value] = inlet_cond_state[Property.P.value]
         StateCycle.calculate_props(outlet_cond_state, graph.fluid, 'Q', 'P')
-        outlet_cond_state[Property.Y.value] = inlet_cond_state[Property.Y.value]
-        deltaH_cond = outlet_cond_state[Property.H.value] - inlet_cond_state[Property.H.value]
+        # outlet_cond_state[Property.Y.value] = inlet_cond_state[Property.Y.value]
+        deltaH_cond = (outlet_cond_state[Property.H.value] - inlet_cond_state[Property.H.value]) * inlet_cond_state[Property.Y.value]
 
         outlet_evap_state = StateCycle.new_empty_state()
         outlet_evap_state[Property.Q.value] = 1.0
         outlet_evap_state[Property.P.value] = inlet_evap_state[Property.P.value]
         StateCycle.calculate_props(outlet_evap_state, graph.fluid, 'Q', 'P')
-        outlet_evap_state[Property.Y.value] = inlet_evap_state[Property.Y.value]
-        deltaH_evap = outlet_evap_state[Property.H.value] - inlet_evap_state[Property.H.value]
+        # outlet_evap_state[Property.Y.value] = inlet_evap_state[Property.Y.value]
+        deltaH_evap = (outlet_evap_state[Property.H.value] - inlet_evap_state[Property.H.value]) * inlet_evap_state[Property.Y.value]
 
         # Adiabatic proccess: deltaH = 0
         # self._deltaH = deltaH_cond - deltaH_evap

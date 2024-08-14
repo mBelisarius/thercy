@@ -39,9 +39,7 @@ class HeaterOpen(BasePart):
         outlet_state[Property.P.value] = partial_p / partial_y
         outlet_state[Property.Q.value] = 0.0
         StateCycle.calculate_props(outlet_state, graph.fluid, 'P', 'Q')
-        outlet_state[Property.Y.value] = partial_y
-
-        # outlet_state['Y'] = partial_y
+        # outlet_state[Property.Y.value] = partial_y
 
         # Only one outlet
         for outlet in self.get_outlets(inlets[0]):

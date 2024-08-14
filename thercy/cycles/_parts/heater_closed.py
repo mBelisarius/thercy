@@ -63,10 +63,9 @@ class HeaterClosed(BasePart):
         outlet_lp_state[Property.P.value] = partial_p_lp / partial_y_lp
         outlet_lp_state[Property.Q.value] = 0.0
         StateCycle.calculate_props(outlet_lp_state, graph.fluid, 'P', 'Q')
-        outlet_lp_state[Property.Y.value] = partial_y_lp
-        # outlet_lp_state['Y'] = partial_y_lp
+        # outlet_lp_state[Property.Y.value] = partial_y_lp
 
-        # dH = partial_y_lp * (outlet_lp_state['H'] - partial_h_lp)
+        # dH = (outlet_lp_state['H'] - partial_h_lp) * partial_y_lp
 
         partial_y_hp = 0.0
         partial_p_hp = 0.0
@@ -77,8 +76,7 @@ class HeaterClosed(BasePart):
         outlet_hp_state[Property.P.value] = partial_p_hp / partial_y_hp
         outlet_hp_state[Property.T.value] = min(self._t_out, partial_t_lp)
         StateCycle.calculate_props(outlet_hp_state, graph.fluid, 'P', 'T')
-        outlet_hp_state[Property.Y.value] = partial_y_hp
-        # outlet_hp_state['Y'] = partial_y_hp
+        # outlet_hp_state[Property.Y.value] = partial_y_hp
 
         for outlet in self.get_outlets(next(iter(inlet_hp.keys()))):
             outlets[outlet.label] = outlet_hp_state.copy()
