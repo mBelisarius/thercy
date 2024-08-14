@@ -40,9 +40,10 @@ class CycleResult:
 
 
 class Cycle:
-    def __init__(self, fluid: str, parts: StateGraph):
-        self._graph: StateGraph = parts
+    def __init__(self, fluid: str, parts: StateGraph, fraction_base=1000.0):
         self._fluid: str = fluid
+        self._graph: StateGraph = parts
+        self._fraction_base = fraction_base
         self._heat_input: float = 0.0
         self._heat_output: float = 0.0
         self._work_pumps: float = 0.0
@@ -146,7 +147,7 @@ class Cycle:
 
         return residual
 
-    def _iterate(self, y0):
+    def _iterate_conserv(self, y0, atol=1e-4):
         parts_map = {i: label for i, label in enumerate(self._graph.nodes)}
         coeffs_mass = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
         coeffs_energy = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
@@ -187,18 +188,18 @@ class Cycle:
             rhs[len(self._graph) + i] = self._graph[label].deltaH
 
         # Define the boundary condition by the penalty method
-        # y0 = 1000.0
+        # y0 = self._fraction_base
         coeffs[0, 0] = 1.0e16
-        rhs[0] = 1000.0 * 1.0e16
+        rhs[0] = self._fraction_base * 1.0e16
 
         # x, res, rnk, s = lstsq(coeffs, rhs, check_finite=False)
-        x, itn = bicgstab(coeffs, rhs, x0=y0, rtol=0.0, atol=1.0e-4)
+        x, itn = bicgstab(coeffs, rhs, x0=y0, rtol=0.0, atol=atol)
         np.clip(x, a_min=1.0e-7, a_max=None, out=x)  # No negative mass flow allowed
         normr = np.linalg.norm(coeffs @ x - rhs)
 
         return x, normr, itn
 
-    def solve(self, x0, x0props, fatol=1e-4, verbose=0):
+    def solve(self, x0, x0props, maxiter=10, fatol=1e-4, verbose=0):
         len_knowns = len(x0props)
 
         if len_knowns < 2:
@@ -207,7 +208,7 @@ class Cycle:
         cycle = StateCycle(self._fluid, [i for i in range(self._graph.points)])
         for i in range(self._graph.points):
             for j in range(len_knowns):
-                cycle[i, Property.Y.value] = 1000.0
+                cycle[i, Property.Y.value] = self._fraction_base
                 if x0.ndim == 1:
                     cycle[i, x0props[j]] = x0[i * len_knowns + j]
                 elif x0.ndim == len_knowns:
@@ -219,24 +220,32 @@ class Cycle:
 
         cycle.calculate_properties(props=x0props)
 
+        for it in range(1, maxiter + 1):
+            sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
+            self._graph.states.matrix = sol_thermo
+
+            sol_conserv, res_conserv, nit_conserv = self._iterate_conserv(cycle.matrix[:, Property.Y.value])
+            sol_thermo[:, Property.Y.value] = sol_conserv * self._fraction_base / np.max(sol_conserv)
+
+            self._graph.states.matrix = sol_thermo
+            cycle.matrix = sol_thermo
+
+            if res_conserv < fatol:
+                break
+
         sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
-        cycle.matrix = sol_thermo
+        sol_thermo[:, Property.Y.value] = sol_conserv * self._fraction_base / np.max(sol_conserv)
         self._graph.states.matrix = sol_thermo
 
-        sol_conserv, conserv_res, conserv_nit = self._iterate(cycle.matrix[:, Property.Y.value])
-        sol_thermo[:, Property.Y.value] = sol_conserv * 1000.0 / np.max(sol_conserv)
-        cycle.matrix = sol_thermo
-        self._graph.states.matrix = sol_thermo
-
-        sol_thermo = self._iterate_thermo(cycle.matrix, fatol=fatol, verbose=verbose)
-        sol_thermo[:, Property.Y.value] = sol_conserv * 1000.0 / np.max(sol_conserv)
-        cycle.matrix = sol_thermo
-        self._graph.states.matrix = sol_thermo
-
-        residual = conserv_res
-        sol = CycleResult(cycle, residual < fatol, residual, conserv_nit)
+        residual = res_conserv
+        sol = CycleResult(self._graph.states, residual < fatol, residual, it)
 
         # Post-processing
+        self._heat_input = 0.0
+        self._heat_output = 0.0
+        self._work_pumps = 0.0
+        self._work_turbines = 0.0
+
         for part in self._graph.nodes.values():
             match part.type:
                 case PartType.CONDENSATOR:

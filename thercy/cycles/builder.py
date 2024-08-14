@@ -16,7 +16,7 @@ class CycleBuilder:
         self._graph = StateGraph(fluid)
         self._parts: dict[str: BasePart] = {}
 
-    def build(self):
+    def build(self, fraction_base=1000.0):
         for label, part in self._parts.items():
             connections = []
             for conn in self._connections[label]:
@@ -27,7 +27,7 @@ class CycleBuilder:
             part.connections = connections
             self._graph.add_part(part)
 
-        return Cycle(self._fluid, self._graph)
+        return Cycle(self._fluid, self._graph, fraction_base)
 
     def add_condenser(self, label: str, inlet: str, outlet: str):
         condensator = Condenser(label)
