@@ -27,7 +27,7 @@ class PropertyInfo:
         'H': {'symbol': 'H', 'label': 'Enthalpy', 'unit': 'J/kg'},
         'S': {'symbol': 'S', 'label': 'Entropy', 'unit': 'J/kg/K'},
         'Q': {'symbol': 'Q', 'label': 'Quality', 'unit': '-'},
-        'Y': {'symbol': 'Y', 'label': 'Fraction', 'unit': 'kg/m3'}
+        'Y': {'symbol': 'Y', 'label': 'Fraction', 'unit': 'kg/s'}
     }
 
     @classmethod
