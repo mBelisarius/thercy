@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "thercy"
-version = "0.0.1"
+version = "0.0.2"
 license = { file = "LICENSE" }
 description = "Thermodynamic cycles solver package"
 authors = [{ name = "Marcos A. Belizario", email = "" }]
