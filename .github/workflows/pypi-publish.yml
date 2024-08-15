@@ -10,7 +10,7 @@ permissions:
 jobs:
   release-build:
     runs-on: ubuntu-latest
-  
+
     steps:
       - uses: actions/checkout@v4
 
@@ -52,4 +52,4 @@ jobs:
           path: dist/
 
       - name: Publish release distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1.9.0
+        uses: pypa/gh-action-pypi-publish@v1.9.0
