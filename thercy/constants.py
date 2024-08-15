@@ -3,22 +3,29 @@ from enum import Enum
 
 class Property(Enum):
     """
-    Enumeration class defining thermodynamic properties.
+    Enumeration representing thermodynamic properties.
 
+    The enumeration values and their corresponding properties are as follows:
+    - T (0): Temperature
+    - P (1): Pressure
+    - D (2): Density
+    - H (3): Enthalpy
+    - S (4): Entropy
+    - Q (5): Quality
+    - Y (6): Fraction
     """
-    T = 0  # Temperature
-    P = 1  # Pressure
-    D = 2  # Density
-    H = 3  # Enthalpy
-    S = 4  # Entropy
-    Q = 5  # Quality
-    Y = 6  # Fraction
+    T = 0
+    P = 1
+    D = 2
+    H = 3
+    S = 4
+    Q = 5
+    Y = 6
 
 
 class PropertyInfo:
     """
-    Utility methods to retrieve information about thermodynamic properties.
-
+    Informations about thermodynamic properties.
     """
     _data = {
         'T': {'symbol': 'T', 'label': 'Temperature', 'unit': 'K'},
@@ -33,20 +40,24 @@ class PropertyInfo:
     @classmethod
     def get_intkey(cls, prop):
         """
+        Returns the integer key associated with the property ``prop``.
+
         Parameters
         ----------
         prop : Property | str | int
-            Property.
+            The parameter representing the key for Property.
 
         Returns
         -------
-        key : int
-            Integer value corresponding to the property `prop`.
+        int
+            The integer key associated with the given property.
 
         Raises
         ------
-        TypeError if `prop` is not an valid property type.
-
+        ValueError
+            If the property key is invalid.
+        TypeError
+            If the type of key is unexpected.
         """
         if isinstance(prop, Property):
             key = prop.value
@@ -64,20 +75,24 @@ class PropertyInfo:
     @classmethod
     def get_strkey(cls, prop):
         """
+        Returns the string key associated with the property ``prop``.
+
         Parameters
         ----------
         prop : Property | str | int
-            Property.
+            The parameter representing the key for Property.
 
         Returns
         -------
-        key : str
-            String corresponding to the property `prop`.
+        str
+            The string key associated with the given property.
 
         Raises
         ------
-        TypeError if `prop` is not an valid property type.
-
+        ValueError
+            If the property key is invalid.
+        TypeError
+            If the type of key is unexpected.
         """
         if isinstance(prop, Property):
             key = prop.name
@@ -95,62 +110,74 @@ class PropertyInfo:
     @classmethod
     def symbol(cls, prop):
         """
+        Returns the symbol associated with the property ``prop``.
+
         Parameters
         ----------
         prop : Property | str | int
-            Property.
+            The parameter representing the key for Property.
 
         Returns
         -------
-        symbol : str
-            Symbol corresponding to the property `prop`.
-
+        str
+            Symbol corresponding to the given property.
         """
         return cls._data[cls.get_strkey(prop)]['symbol']
 
     @classmethod
     def label(cls, prop):
         """
+        Returns the label or description associated with the property ``prop``.
+
         Parameters
         ----------
         prop : Property | str | int
-            Property.
+            The parameter representing the key for Property.
 
         Returns
         -------
-        label : str
-            Label or description corresponding to the property `prop`.
-
+        str
+            Label or description corresponding to the given property.
         """
         return cls._data[cls.get_strkey(prop)]['label']
 
     @classmethod
     def unit(cls, prop):
         """
+        Returns the SI unit associated with the property ``prop``.
+
         Parameters
         ----------
         prop : Property | str | int
-            Property.
+            The parameter representing the key for Property.
 
         Returns
         -------
-        unit : str
-            SI unit corresponding to the property `prop`.
-
+        str
+            SI unit corresponding to the given property.
         """
         return cls._data[cls.get_strkey(prop)]['unit']
 
 
 class PartType(Enum):
     """
-    Enumeration class defining types of parts in a thermodynamic cycle.
+    Enumeration representing different types of parts in a thermodynamic system.
 
+    The enumeration values and their corresponding properties are as follows:
+    - CONDENSATOR    (0): Condensator
+    - EVAPORATOR     (1): Evaporator
+    - HEAT_EXCHANGER (2): Heat exchanger
+    - HEAT_SOURCE    (3): Heat source
+    - PUMP           (4): Pump
+    - REHEATER_CLOSE (5): Closed reheater
+    - REHEATER_OPEN  (6): Open reheater
+    - TURBINE        (7): Turbine
     """
     CONDENSATOR = 0
     EVAPORATOR = 1
     HEAT_EXCHANGER = 2
     HEAT_SOURCE = 3
     PUMP = 4
-    REHEATER_CLOSE = 5
+    REHEATER_CLOSED = 5
     REHEATER_OPEN = 6
     TURBINE = 7

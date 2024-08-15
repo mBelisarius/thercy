@@ -5,18 +5,22 @@ from .base_part import BasePart, Connection
 
 
 class SteamGenerator(BasePart):
-    _prop: str
+    """
+    Steam generator part where the outlet is at ``value`` of the property
+    ``prop`` with the same pressure as the inlet.
 
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    prop : str
+        Known property at the outlet.
+    value : float
+        Value of the known property.
+    connections : list[Connection]
+        List of connections for this part.
+    """
     def __init__(self, label, prop, value, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        prop : str
-        value : float
-        connections : list[Connection]
-
-        """
         super().__init__(
             label,
             PartType.HEAT_SOURCE,

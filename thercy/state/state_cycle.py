@@ -9,27 +9,18 @@ from thercy.utils import list_like
 
 class StateCycle:
     """
-    Thermodynamic state cycle composed of multiple state points.
-
-    Properties
-    ----------
-    fluid : str
-        Fluid composition or mixture name.
-    data : dict
-        Dictionary containing keyed state points of the cycle.
-
+         Class StateCycle:
     """
     def __init__(self, fluid, data=None):
         """
-        Initialize a StateCycle instance.
+        Initialize a `StateCycle` instance.
 
         Parameters
         ----------
         fluid : str
             Fluid composition or mixture name.
-        data : dict[str: np.ndarray] | list[str], optional
+        data : dict[str: numpy.ndarray] | list[str], optional
             Dictionary containing state points of the cycle. Default: {}
-
         """
         if isinstance(data, (list, tuple, np.ndarray)):
             data = {key: self.new_empty_state(1) for key in data}
@@ -106,7 +97,6 @@ class StateCycle:
         Raises
         ------
         IndexError if the index has an invalid length.
-
         """
         if list_like(key):
             len_var = len(key)
@@ -131,7 +121,6 @@ class StateCycle:
         Returns
         ------
         value : float
-
         """
         index_state = self._data_keys[key[0]]
         index_prop = PropertyInfo.get_intkey(key[1])
@@ -149,7 +138,6 @@ class StateCycle:
         Returns
         ------
         value : StatePoint
-
         """
         return self._matrix[self._data_keys[key]]
 
@@ -161,13 +149,12 @@ class StateCycle:
         ----------
         key : str | tuple
             Key to access the state point.
-        value : np.ndarray | float
+        value : numpy.ndarray | float
             State point or float value to assign.
 
         Raises
         ------
         IndexError if the index has an invalid length.
-
         """
         if list_like(key):
             len_var = len(key)
@@ -194,7 +181,6 @@ class StateCycle:
         Raises
         ------
         TypeError if the value type is not numeric.
-
         """
         if not isinstance(value, (int, float)):
             raise TypeError('Value is not a numeric type')
@@ -218,13 +204,12 @@ class StateCycle:
         ----------
         key : str
             Key to access the state point.
-        value : np.ndarray
+        value : numpy.ndarray
             State point to assign.
 
         Raises
         ------
         TypeError if the value type is invalid.
-
         """
         if value is None:
             value = self.new_empty_state(2)
@@ -248,11 +233,19 @@ class StateCycle:
 
     @property
     def matrix(self):
+        """Get the matrix of thermodynamic states."""
         return self._matrix
 
     @matrix.setter
     def matrix(self, value):
-        """Set the matrix of state points."""
+        """
+        Set the matrix of states.
+
+        Parameters
+        ----------
+        value : numpy.ndarray
+            Matrix of states.
+        """
         if isinstance(value, np.ndarray):
             if value.ndim != 2:
                 raise ValueError('Matrix must have 2 dimensions')
@@ -276,6 +269,24 @@ class StateCycle:
 
     @staticmethod
     def new_empty_state(dim=1):
+        """
+        Generate an empty array represeting a state.
+
+        Parameters
+        ----------
+        dim : int, optional
+            The dimension of the state. Default: 1
+
+        Returns
+        -------
+        numpy.ndarray
+            An empty state array filled with NaN values.
+
+        Raises
+        ------
+        ValueError
+            If the dimension is not 1 or 2.
+        """
         if dim == 1:
             return np.full(len(Property), np.nan, dtype=np.float64)
         elif dim == 2:
@@ -291,7 +302,6 @@ class StateCycle:
         -------
         CoolProp.Plots.StateContainer
             State container.
-
         """
         container = StateContainer()
 
@@ -309,8 +319,10 @@ class StateCycle:
 
         Parameters
         ----------
-        state : np.ndarray
+        state : numpy.ndarray
             State to be calculated.
+        fluid : str
+            Fluid composition or mixture name.
         prop1 : Property | str | int, optional
             First known property. Default: None
         prop2 : Property | str | int, optional
@@ -319,7 +331,6 @@ class StateCycle:
             Properties to calculate. Default: all
         exclude : list[str], optional
             Properties to exclude from calculation. Default: None
-
         """
         # TODO: Move definition of not thermodynamic properties to `constants`
         not_thermo = ['Y']
@@ -371,9 +382,10 @@ class StateCycle:
 
         Parameters
         ----------
-        key : str | list[str]
-            Key of the states to be calculated.
-
+        key : str | list[str], optional
+            Key of the states to be calculated. Default: all
+        props : tuple[Property | str | int], optional
+            Tuple of known properties to use in the computation. Default: None
         """
         if key is None:
             key = self._data_keys.keys()
@@ -399,13 +411,12 @@ class StateCycle:
         key2 : str
             Key of the second state point.
         tol : float, optional
-            Tolerance for constant property comparison. Default: 1e-4
+            Tolerance for constant property comparison. Default: 1e-7
 
         Returns
         -------
         list[Property]
             List of constant properties.
-
         """
         index_state1 = self._data_keys[key1]
         index_state2 = self._data_keys[key2]
@@ -419,20 +430,18 @@ class StateCycle:
         Parameters
         ----------
         n : int, optional
-            Number of points between each pair of state points.
-            Default: 50
+            Number of points between each pair of state points. Default: 50
         close_envelope : bool, optional
-            Close the cycle envelope by connecting the last state to the
-            first state. Default: False
+            Close the cycle envelope by connecting the last state to the first
+            state. Default: False
         precise : bool, optional
-            Use a more precise version of interpolation by enthalpy
-            instead of temperature, slower. Default: False
+            Use a more precise version of interpolation by enthalpy instead of
+            temperature, slower. Default: False
 
         Returns
         -------
         StateCycle
             State cycle containing the cloud points.
-
         """
         cloud = StateCycle(self._fluid)
 

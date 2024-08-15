@@ -7,6 +7,18 @@ from .base_part import BasePart, Connection
 
 
 class HeaterClosedReal(BasePart):
+    """
+    Closed heater part where the heated outlet receives ``dH`` enthalpy and the
+    heat source outlet is saturated liquid with ``dH`` enthalpy loss, both with
+    the same pressure as its respectively inlet.
+
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    connections : list[Connection]
+        List of connections for this part.
+    """
     def __init__(self, label, connections=None):
         """
         Parameters

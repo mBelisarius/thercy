@@ -1,7 +1,6 @@
 import numpy as np
 
 from thercy.constants import Property, PropertyInfo
-from thercy.utils import list_like
 from .state_cycle import StateCycle
 
 
@@ -20,13 +19,12 @@ class StateGraph:
     """
     def __init__(self, fluid):
         """
-        Initialize a StateGraph instance.
+        Initialize a `StateGraph` instance.
 
         Parameters
         ----------
         fluid : str
             Fluid composition or mixture name.
-
         """
         self._nodes: dict[str, any] = {}
         self._edges: list[(str, str)] = []
@@ -59,7 +57,6 @@ class StateGraph:
         -------
         any
             Node corresponding to the key.
-
         """
         return self._nodes[key]
 
@@ -80,6 +77,7 @@ class StateGraph:
 
     @property
     def fluid(self):
+        """Get the fluid composition or mixture name."""
         return self.states.fluid
 
     def get_edge_index(self, edge):
@@ -95,7 +93,6 @@ class StateGraph:
         -------
         int
             Index of the edge.
-
         """
         return self._edges_map[edge]
 
@@ -119,7 +116,6 @@ class StateGraph:
         -------
         list[str | int]
             List of outlet keys connected to the node.
-
         """
         if inlet_key is None:
             return {i if index else edge[1] for i, edge in enumerate(self._edges) if edge[0] == key}
@@ -150,7 +146,6 @@ class StateGraph:
         ------
         ValueError
             If the part already exists in the graph.
-
         """
         if part.label in self._nodes:
             raise ValueError('part already exists')
@@ -181,17 +176,15 @@ class StateGraph:
         Parameters
         ----------
         n : int, optional
-            Number of points between each pair of state points.
-            Default: 50
+            Number of points between each pair of state points. Default: 50
         precise : bool, optional
-            Use a more precise version of interpolation by enthalpy
-            instead of by temperature, slower. Default: False
+            Use a more precise version of interpolation by enthalpy instead of
+            by temperature, slower. Default: False
 
         Returns
         -------
         list[StateCycle]
             List of state cycles containing the cloud points.
-
         """
         cloud = [StateCycle(self.states.fluid) for _ in range(self.points)]
 

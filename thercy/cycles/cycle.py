@@ -1,7 +1,5 @@
 import numpy as np
-from CoolProp.CoolProp import PropsSI
-from scipy.linalg import lstsq, solve
-from scipy.optimize import minimize, root
+from scipy.optimize import root
 from scipy.sparse.linalg import lsmr, lsqr, bicgstab
 
 from thercy.constants import PartType, Property, PropertyInfo
@@ -10,37 +8,75 @@ from thercy.utils import norm_l1, norm_l2, norm_lmax, norm_lp
 
 
 class CycleResult:
+    """
+    Represents the cycle result.
+
+    Properties
+    ----------
+    x : numpy.ndarray
+        The solution of the cycle.
+    success : bool
+        Whether or not the solver exited successfully.
+    res : float
+        Residual of the result.
+    nit : int
+        Number of iterations performed by the solver.
+
+    Notes
+    -----
+    `CycleResult` may not have all attributes listed here.
+    """
     def __init__(self, x, success, fun, nit):
         self._x = x
         self._success = success
-        self._fun = fun
+        self._res = fun
         self._nit = nit
 
     def __str__(self):
         return (f"{'x':>20}: {self._x}\n"
                 f"{'success':>20}: {self._success}\n"
-                f"{'fun':>20}: {self._fun}\n"
+                f"{'fun':>20}: {self._res}\n"
                 f"{'nit':>20}: {self._nit}")
 
     @property
     def x(self):
+        """Get the solution of the cycle."""
         return self._x
 
     @property
     def success(self):
+        """Get whether or not the solver exited successfully."""
         return self._success
 
     @property
-    def fun(self):
-        return self._fun
+    def res(self):
+        """Get the residual of the result."""
+        return self._res
 
     @property
     def nit(self):
+        """Get the number of iterations performed by the solver."""
         return self._nit
 
 
 class Cycle:
-    def __init__(self, fluid: str, parts: StateGraph, fraction_base=1000.0):
+    """
+    Thermodynamic cycle solver.
+    """
+    def __init__(self, fluid, parts, fraction_base=1000.0):
+        """
+        Initialize a `Cycle` instance.
+
+        Parameters
+        ----------
+        fluid : str
+            Fluid to be used in the cycle.
+        parts : StateGraph
+            `StateGraph` containing the parts and connections of the cycle.
+        fraction_base : float, optional
+            The maximum value for fractions to be used for the cycle.
+            If 1.0, then fractions will be a percentage. Default: 1000.0
+        """
         self._fluid: str = fluid
         self._graph: StateGraph = parts
         self._fraction_base = fraction_base
@@ -50,47 +86,88 @@ class Cycle:
         self._work_turbines: float = 0.0
 
     def __len__(self):
+        """Get the number of parts in the cycle."""
         return len(self._graph)
 
     def __str__(self):
+        """String representation of the state cycle."""
         return str(self._graph)
 
     @property
     def bwr(self):
+        """Get the BWR of the cycle."""
         return self._work_pumps / -self._work_turbines
 
     @property
-    def cycle(self):
-        return self._graph.states
-
-    @property
     def efficiency(self):
+        """Get the efficiency of the cycle."""
         return self.work / self.heat_input
 
     @property
     def graph(self):
+        """Get the `StateGraph` associated with this."""
         return self._graph
 
     @property
     def heat_input(self):
+        """Get the heat inputed into the cycle."""
         return self._heat_input
 
     @property
     def heat_output(self):
+        """Get the heat outputed from the cycle."""
         return -self._heat_output
 
     def massflow(self, power):
+        """
+        Get the mass flow rate necessary to achieve the given `power` output.
+
+        Parameters
+        ----------
+        power : float
+            Power required by the cycle.
+
+        Returns
+        -------
+        float
+            Mass flow rate necessary to achieve `power`.
+        """
         return power / self.work
 
     @property
     def states(self):
+        """Get the `StateCycle` associated with this."""
         return self._graph.states
 
     @property
     def work(self):
+        """Get the work done by the cycle."""
         return -(self._work_pumps + self._work_turbines)
 
-    def _equation_thermo(self, x: np.ndarray):
+    def _equation_thermo(self, x):
+        """
+        Calculates the residual of an equation system for thermochemical equilibrium.
+
+        Parameters
+        ----------
+        x : numpy.ndarray
+            An array containing the unknown values of the variables in the equation system.
+
+        Returns
+        -------
+        residual : numpy.ndarray
+            An array containing the residuals of the equation system.
+
+        Note
+        ----
+        The equation system represents the thermochemical equilibrium of a
+        process. It solves for the unknown values of the variables based on the
+        current state of the graph. The equation system is solved using an
+        iterative method.
+
+        The residuals of the equation system are calculated by comparing the
+        solved values with the input values in the ``x`` array.
+        """
         len_props = len(Property)
         len_states = self._graph.points
         residual = np.zeros(x.size)
@@ -116,7 +193,28 @@ class Cycle:
 
         return residual
 
-    def _iterate_thermo(self, x0: np.ndarray, fatol=1e-4, maxfev=10, verbose=0):
+    def _iterate_thermo(self, x0, fatol=1e-4, maxfev=10, verbose=0):
+        """
+        Iterates the thermodynamic equations to find the solution for a given
+        initial guess ``x0``.
+
+        Parameters
+        ----------
+        x0 : numpy.ndarray
+            The initial guess for the solution.
+        fatol : float, optional
+            The absolute error tolerance for the solution. Default: 1e-4
+        maxfev : int, optional
+            The maximum number of iterations allowed. Default: 10
+        verbose : int, optional
+            The level of verbosity. Set to 0 for no output, higher values for
+            more output. Default: 0
+
+        Returns
+        -------
+        numpy.ndarray
+            The solution vector.
+        """
         sol = root(
             self._equation_thermo,
             x0,
@@ -130,11 +228,26 @@ class Cycle:
 
         if verbose >= 3:
             print(f"{'Rankine._iterate_thermo : ':40s}"
-                  f"L2(fun) = {norm_l2(sol.fun, rescale=True)}, nfev={sol.nfev}")
+                  f"L2(fun) = {norm_l2(sol.fun, normalize=True)}, nfev={sol.nfev}")
 
         return sol.x
 
-    def _equation_conserv(self, y: np.ndarray):
+    def _equation_conserv(self, y):
+        """
+        This method performs an equation conservation calculation and returns
+        the resulting residual.
+
+        Parameters
+        ----------
+        y : numpy.ndarray
+            The array of values representing the state fractions.
+
+        Returns
+        -------
+        numpy.ndarray
+            The array of residuals after the equation conservation calculation.
+
+        """
         residual = np.zeros(2 * len(self._graph))
 
         for index in range(self._graph.points):
@@ -147,7 +260,30 @@ class Cycle:
 
         return residual
 
-    def _iterate_conserv(self, y0, atol=1e-4):
+    def _iterate_conserv(self, y0=None, atol=1e-4):
+        """
+        Solve a system of linear equations representing the conservation laws.
+
+        Parameters
+        ----------
+        y0 : numpy.ndarray, optional
+            The initial guess. Default: None
+        atol : float, optional
+            The absolute tolerance for convergence. The iteration will stop when
+            the residual norm is smaller than this value. Default: 1e-4
+
+        Returns
+        -------
+        x : ndarray
+            The solution vector to the system of linear equations.
+        normr : float
+            The norm of the residual.
+        itn : int
+            The number of iterations performed to reach the solution.
+        """
+        if y0 is None:
+            y0 = np.full(self._graph.points, self._fraction_base)
+
         parts_map = {i: label for i, label in enumerate(self._graph.nodes)}
         coeffs_mass = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
         coeffs_energy = np.zeros((self._graph.points, self._graph.points), dtype=np.float64)
@@ -192,6 +328,7 @@ class Cycle:
         coeffs[0, 0] = 1.0e16
         rhs[0] = self._fraction_base * 1.0e16
 
+        # TODO: Determine the best solver
         # x, res, rnk, s = lstsq(coeffs, rhs, check_finite=False)
         x, itn = bicgstab(coeffs, rhs, x0=y0, rtol=0.0, atol=atol)
         np.clip(x, a_min=1.0e-7, a_max=None, out=x)  # No negative mass flow allowed
@@ -200,8 +337,41 @@ class Cycle:
         return x, normr, itn
 
     def solve(self, x0, x0props, maxiter=10, fatol=1e-4, verbose=0):
-        len_knowns = len(x0props)
+        """
+        Solves the thermodynamic cycle using the given initial conditions.
 
+        Parameters
+        ----------
+        x0 : numpy.ndarray
+            The initial condition for the property guesses. It can be a
+            1-dimensional array if x0props has a length of 1, a 2-dimensional
+            array if x0props has the same length as the number of rows in x0, or
+            a 2-dimensional array if x0props has the same length as the number
+            of columns in x0.
+        x0props : list | tuple
+            The list of property names corresponding to the columns of x0.
+        maxiter : int, optional
+            The maximum number of iterations to perform. Default: 10
+        fatol : float, optional
+            The convergence absolute tolerance for the thermodynamic solver.
+            Default: 1e-4
+        verbose : int, optional
+            The level of verbosity. Set to 0 for no output, higher values for
+            more output. Default: 0
+
+        Returns
+        -------
+        CycleResult
+            A `CycleResult` containing the results of the thermodynamic cycle
+            solution.
+
+        Raises
+        ------
+        ValueError
+            If the length of x0props is less than 2.
+            If the shape of x0 is not valid.
+        """
+        len_knowns = len(x0props)
         if len_knowns < 2:
             raise ValueError("x0 must have at least two property guesses.")
 

@@ -5,14 +5,18 @@ from .base_part import BasePart, Connection
 
 
 class Evaporator(BasePart):
-    def __init__(self, label, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        connections : list[Connection]
+    """
+    Evaporator part where the outlet is saturated vapor with the same pressure
+    as the inlet.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    def __init__(self, label, connections=None):
         super().__init__(
             label,
             PartType.EVAPORATOR,

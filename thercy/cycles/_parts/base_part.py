@@ -5,6 +5,16 @@ from thercy.state import StateGraph
 
 
 class Connection:
+    """
+    Class representing a connection between two parts in a system.
+
+    Attributes
+    ----------
+    inlets : list[BasePart]
+        List of input parts connected to this connection.
+    outlets : list[BasePart]
+        List of output parts connected to this connection.
+    """
     def __init__(self, inlets, outlets):
         """
         Parameters
@@ -26,15 +36,34 @@ class Connection:
 
 
 class BasePart(ABC):
-    def __init__(self, label, type, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        type : PartType
-        connections : list[Connection]
+    """
+    Base class for different types of parts.
 
-        """
+    Parameters
+    ----------
+    label: str
+        The label or name of the part.
+    type: PartType
+        The type of the part.
+    connections: list[Connection], optional
+        List of connections associated with the part.
+
+    Attributes
+    ----------
+    label: str
+        Label of the part.
+    type: PartType
+        Type of the part.
+    connections: list[Connection]
+        Connections associated with the part.
+    inlet_parts: list[BasePart]
+        Parts connected to the inlets of this part.
+    outlet_parts: list[BasePart]
+        Parts connected to the outlets of this part.
+    deltaH: float
+        Change in extensive enthalpy of the part.
+    """
+    def __init__(self, label, type, connections=None):
         if connections is None:
             connections = []
 
@@ -92,7 +121,21 @@ class BasePart(ABC):
     def deltaH(self):
         raise NotImplementedError()
 
-    def get_inlets(self, outlet: str):
+    def get_inlets(self, outlet):
+        """
+        Returns the inlets connected to a given outlet.
+
+        Parameters
+        ----------
+        outlet : str
+            The label of the outlet for which the connected inlets are required.
+
+        Returns
+        -------
+        list or None
+            A list of inlets connected to the given outlet. If no inlets are
+            connected, None is returned.
+        """
         for conn in self._internal_conn:
             for outl in conn.outlets:
                 if outl.label == outlet:
@@ -100,7 +143,21 @@ class BasePart(ABC):
 
         return None
 
-    def get_outlets(self, inlet: str):
+    def get_outlets(self, inlet):
+        """
+        Returns the outlets connected to a given inlet.
+
+        Parameters
+        ----------
+        inlet: str
+            The label of the intlet for which the connected outlets are required.
+
+        Returns
+        -------
+        list or None
+            A list of outlets connected to the given inlet. If no outlets are
+            connected, None is returned.
+        """
         for conn in self._internal_conn:
             for inl in conn.inlets:
                 if inl.label == inlet:
@@ -108,7 +165,25 @@ class BasePart(ABC):
 
         return None
 
-    def solve_conserv(self, graph: StateGraph, inlets: list[str], outlets: list[str]):
+    def solve_conserv(self, graph, inlets, outlets):
+        """
+        Solves the conservation laws for this part.
+
+        Parameters
+        ----------
+        graph : StateGraph
+            The state graph representing the system.
+        inlets : list[str]
+            The labels of the inlets connected to this part as used in ``graph``.
+        outlets : list[str]
+            The labels of the outlets connected to this part as used in ``graph``.
+
+        Returns
+        -------
+        list[float]
+            The residual values calculated based on the conservation laws of
+            mass and energy, respectively.
+        """
         residual = [0.0, 0.0]
 
         for conn in self.connections:
@@ -135,5 +210,21 @@ class BasePart(ABC):
         return residual
 
     @abstractmethod
-    def solve(self, graph: StateGraph, inlets: list[str]):
+    def solve(self, graph, inlets):
+        """
+        Solve the states of the outlets connected to this part.
+
+        Parameters
+        ----------
+        graph : StateGraph
+            The state graph representing the system.
+
+        inlets : list[str]
+            The labels of the inlets connected to this part as used in ``graph``.
+
+        Raises
+        ------
+        NotImplementedError
+            If the function is not implemented by the subclass.
+        """
         raise NotImplementedError()

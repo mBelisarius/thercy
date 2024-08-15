@@ -7,15 +7,21 @@ from .base_part import BasePart, Connection
 
 
 class HeaterClosed(BasePart):
-    def __init__(self, label, t_out, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        t_out : float
-        connections : list[Connection]
+    """
+    Closed heater part where the heated outlet is at ``t_out`` temperature and
+    the heat source outlet is saturated liquid, both with the same pressure as
+    its respectively inlet.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    t_out : float
+        Temperature of the heated outlet.
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    def __init__(self, label, t_out, connections=None):
         super().__init__(
             label,
             PartType.REHEATER_OPEN,

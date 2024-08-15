@@ -5,16 +5,21 @@ from .base_part import BasePart, Connection
 
 
 class Pump(BasePart):
-    def __init__(self, label, p_out, eta=1.0, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        p_out : float
-        eta : float
-        connections : list[Connection]
+    """
+    Pump part where the outlet pressure is ``p_out``.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    p_out : float
+        Pressure of the outlet.
+    eta : float, optional
+        Isentropic efficiency. Default: 1.0
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    def __init__(self, label, p_out, eta=1.0, connections=None):
         super().__init__(
             label,
             PartType.PUMP,

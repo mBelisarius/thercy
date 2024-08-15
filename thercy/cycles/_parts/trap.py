@@ -5,15 +5,20 @@ from .base_part import BasePart, Connection
 
 
 class Trap(BasePart):
-    def __init__(self, label, p_out, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        p_out : float
-        connections : list[Connection]
+    """
+    Trap part where the outlet pressure is ``p_out`` with an isenthalpic process
+    occurring.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    p_out : float
+        Pressure of the outlet.
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    def __init__(self, label, p_out, connections=None):
         super().__init__(
             label,
             PartType.CONDENSATOR,

@@ -9,18 +9,25 @@ from .evaporator import Evaporator
 
 
 class HeatExchanger(BasePart):
-    def __init__(self, label, dt=0., connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        dt : float
-        connections : list[Connection]
+    """
+    Heat exchanger part where the outlet of the conderser part is saturated
+    liquid and the outlet of the evaporator part is saturated vapor, both with
+    the same pressure as its respectively inlet.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    dt : float, optional
+        Default: 0.0
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    # TODO : What is dt?
+    def __init__(self, label, dt=0.0, connections=None):
         super().__init__(
             label,
-            PartType.REHEATER_OPEN,
+            PartType.HEAT_EXCHANGER,
             connections,
         )
 

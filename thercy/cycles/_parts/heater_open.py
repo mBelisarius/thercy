@@ -5,14 +5,18 @@ from .base_part import BasePart, Connection
 
 
 class HeaterOpen(BasePart):
-    def __init__(self, label, connections=None):
-        """
-        Parameters
-        ----------
-        label : str
-        connections : list[Connection]
+    """
+    Open heater part where the outlet is saturated liquid with the equivalent
+    pressure (weighted average of pressures by flow rate) of its inlets.
 
-        """
+    Parameters
+    ----------
+    label : str
+        Label for this part.
+    connections : list[Connection]
+        List of connections for this part.
+    """
+    def __init__(self, label, connections=None):
         super().__init__(
             label,
             PartType.REHEATER_OPEN,
